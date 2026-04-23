@@ -30,10 +30,12 @@ export async function POST(request: NextRequest) {
       : 'No report started yet for this session.'
   }`
 
+  const modelMessages = await convertToModelMessages(messages)
+
   const result = streamText({
     model: openai('gpt-4o'),
     system: contextPrompt,
-    messages: convertToModelMessages(messages),
+    messages: modelMessages,
     tools: chatTools,
     stopWhen: stepCountIs(5),
     onFinish: async ({ text }) => {
