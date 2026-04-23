@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.53",
+    "@ai-sdk/react": "^3.0.170",
     "@base-ui/react": "^1.4.1",
+    "@supabase/auth-ui-react": "^0.4.7",
+    "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "ai": "^6.0.168",
