@@ -37,16 +37,6 @@ export default function ChatPage() {
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport,
-    onFinish: ({ message }: { message: UIMessage }) => {
-      const text = message.parts
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text)
-        .join('')
-
-      if (text.includes('[GENERATE_REPORT]') && sessionId) {
-        triggerGeneration(sessionId, lastUserMessageRef.current)
-      }
-    },
   })
 
   const isGenerating = status === 'submitted' || status === 'streaming'
@@ -209,10 +199,23 @@ export default function ChatPage() {
     }
 
     lastUserMessageRef.current = input
+
+    // Detect generation intent from user message
+    const lowerInput = input.toLowerCase()
+    const wantsGeneration =
+      lowerInput.includes('generate') ||
+      lowerInput.includes('create the report') ||
+      lowerInput.includes('write the report') ||
+      lowerInput.includes('produce the report')
+
     const text = input
     setInput('')
     sendMessage({ text })
-  }, [input, sessionId, supabase, sendMessage])
+
+    if (wantsGeneration && activeSessionId) {
+      triggerGeneration(activeSessionId, input)
+    }
+  }, [input, sessionId, supabase, sendMessage, triggerGeneration])
 
   return (
     <>

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     report
       ? `Current report status: ${report.status}. Sections completed: ${Object.keys(report.sections as object).length}/${template.sections.length}`
       : 'No report started yet for this session.'
-  }\n\nIMPORTANT: When the user provides clinical notes and asks you to generate a report, respond with EXACTLY this format on the first line:\n[GENERATE_REPORT]\nThen on the next line, provide a brief acknowledgment message. Do NOT include [GENERATE_REPORT] unless the user explicitly asks to generate the report.`
+  }\n\nWhen the user provides clinical notes and asks to generate a report, acknowledge their request and let them know the report is being generated. The system will handle the actual generation automatically.`
 
   const modelMessages = await convertToModelMessages(messages)
 
