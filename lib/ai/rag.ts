@@ -24,7 +24,12 @@ export async function queryRag(params: {
     userLimit = 3,
   } = params
 
-  const embedding = await embedText(queryText)
+  let embedding: number[]
+  try {
+    embedding = await embedText(queryText)
+  } catch {
+    return { foundational: [], userStyle: [] }
+  }
   const supabase = await createServiceClient()
   const embeddingStr = `[${embedding.join(',')}]`
 
@@ -42,14 +47,18 @@ export async function queryRag(params: {
     filter_section: sectionFilter ?? null,
   })
 
-  const [foundationalResult, userResult] = await Promise.all([
-    foundationalQuery,
-    userQuery,
-  ])
+  try {
+    const [foundationalResult, userResult] = await Promise.all([
+      foundationalQuery,
+      userQuery,
+    ])
 
-  return {
-    foundational: (foundationalResult.data ?? []).map(mapChunk),
-    userStyle: (userResult.data ?? []).map(mapChunk),
+    return {
+      foundational: (foundationalResult.data ?? []).map(mapChunk),
+      userStyle: (userResult.data ?? []).map(mapChunk),
+    }
+  } catch {
+    return { foundational: [], userStyle: [] }
   }
 }
 

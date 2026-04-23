@@ -22,7 +22,7 @@ export async function routeFeedbackToSections(
   const prompt = buildRevisionRoutingPrompt(sectionNames, userFeedback)
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-5.4-pro',
+    model: process.env.GENERATION_MODEL || 'gpt-4o',
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
@@ -94,7 +94,7 @@ export async function reviseSection(
   )
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-5.4-pro',
+    model: process.env.GENERATION_MODEL || 'gpt-4o',
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },

@@ -94,7 +94,7 @@ export async function generateSection(
   }
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-5.4-pro',
+    model: process.env.GENERATION_MODEL || 'gpt-4o',
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
@@ -120,7 +120,7 @@ export async function runCoherenceCheck(params: {
   const prompt = buildCoherencePrompt(params.fullReport)
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-5.4-pro',
+    model: process.env.GENERATION_MODEL || 'gpt-4o',
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
