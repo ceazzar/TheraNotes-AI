@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION public.match_exemplar_chunks(
-  query_embedding extensions.vector(3072),
+  query_embedding extensions.vector(1536),
   match_count INT DEFAULT 5,
   filter_user_id UUID DEFAULT NULL,
   filter_section TEXT DEFAULT NULL

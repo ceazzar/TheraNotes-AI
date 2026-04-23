@@ -28,7 +28,7 @@ CREATE TABLE public.exemplar_chunks (
   content     TEXT NOT NULL,
   section     TEXT,
   source_file TEXT,
-  embedding   extensions.vector(3072),
+  embedding   extensions.vector(1536),
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
@@ -53,9 +53,9 @@ CREATE INDEX idx_exemplar_chunks_user ON public.exemplar_chunks(user_id);
 CREATE INDEX idx_reports_session ON public.reports(session_id);
 CREATE INDEX idx_reports_user ON public.reports(user_id);
 
--- pgvector index (IVFFlat for cosine similarity)
+-- pgvector index (HNSW for cosine similarity)
 CREATE INDEX idx_exemplar_chunks_embedding ON public.exemplar_chunks
-  USING ivfflat (embedding extensions.vector_cosine_ops) WITH (lists = 100);
+  USING hnsw (embedding extensions.vector_cosine_ops);
 
 -- Row Level Security
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
