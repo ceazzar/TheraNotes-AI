@@ -1,30 +1,24 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Download } from 'lucide-react'
+import { generateDocx } from '@/lib/export/docx'
+import { saveAs } from 'file-saver'
 
-interface ExportButtonProps {
+export function ExportButton({
+  sections,
+}: {
   sections: Record<string, { title: string; content: string }>
-}
-
-export function ExportButton({ sections }: ExportButtonProps) {
-  const handleExport = () => {
-    const text = Object.entries(sections)
-      .map(([, s]) => `${s.title}\n\n${s.content}`)
-      .join('\n\n---\n\n')
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'report.txt'
-    a.click()
-    URL.revokeObjectURL(url)
+}) {
+  const handleExport = async () => {
+    const blob = await generateDocx(sections)
+    saveAs(blob, 'FCA-Report.docx')
   }
 
   return (
-    <Button variant="outline" size="xs" onClick={handleExport}>
-      <Download className="size-3" />
-      Export
-    </Button>
+    <button
+      onClick={handleExport}
+      className="text-xs px-3 py-1.5 rounded-md bg-muted hover:bg-accent text-muted-foreground"
+    >
+      Export DOCX
+    </button>
   )
 }
