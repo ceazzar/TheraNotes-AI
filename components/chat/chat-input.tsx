@@ -6,7 +6,6 @@ import {
   PromptInput,
   PromptInputTextarea,
   PromptInputActions,
-  PromptInputAction,
 } from '@/components/ui/prompt-input'
 
 interface ChatInputProps {
@@ -31,16 +30,17 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
             placeholder="Describe the clinical notes or ask about the report..."
           />
           <PromptInputActions className="justify-end px-2 pb-2">
-            <PromptInputAction tooltip="Send message">
-              <Button
-                variant="default"
-                size="icon-sm"
-                onClick={onSubmit}
-                disabled={isLoading || !value.trim()}
-              >
-                <Send className="size-4" />
-              </Button>
-            </PromptInputAction>
+            <Button
+              variant="default"
+              size="icon-sm"
+              onClick={(e) => {
+                e.preventDefault()
+                onSubmit()
+              }}
+              disabled={isLoading || !value.trim()}
+            >
+              <Send className="size-4" />
+            </Button>
           </PromptInputActions>
         </PromptInput>
       </div>
