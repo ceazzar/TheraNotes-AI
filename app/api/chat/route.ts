@@ -69,7 +69,9 @@ export async function POST(request: NextRequest) {
         execute: async (input: { clinicalNotes: string; questionnaireData?: string }) => {
           const { clinicalNotes, questionnaireData } = input
 
-          const { data: newReport } = await serviceSupabase
+          try {
+
+          const { data: newReport, error: reportError } = await serviceSupabase
             .from('reports')
             .insert({
               session_id: sessionId,
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
             .select('id')
             .single()
 
-          if (!newReport) return { error: 'Failed to create report' }
+          if (!newReport) return { error: `Failed to create report: ${reportError?.message || 'unknown'}` }
 
           const reportId = newReport.id
           const sections = template.sections.filter(
@@ -156,6 +158,10 @@ export async function POST(request: NextRequest) {
             results: sectionResults,
             coherenceCheck: coherenceResult || 'Completed',
             status: 'ready',
+          }
+
+          } catch (err) {
+            return { error: `Generation failed: ${err instanceof Error ? err.message : String(err)}` }
           }
         },
       }),
