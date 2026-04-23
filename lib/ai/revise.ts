@@ -6,7 +6,11 @@ import {
 } from '@/lib/ai/prompts'
 import template from '@/lib/template.json'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 export async function routeFeedbackToSections(
   userFeedback: string
@@ -17,7 +21,7 @@ export async function routeFeedbackToSections(
 
   const prompt = buildRevisionRoutingPrompt(sectionNames, userFeedback)
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-5.4-pro',
     messages: [
       { role: 'system', content: prompt.system },
@@ -89,7 +93,7 @@ export async function reviseSection(
     feedback,
   )
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-5.4-pro',
     messages: [
       { role: 'system', content: prompt.system },
