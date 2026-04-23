@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { streamText, stepCountIs } from 'ai'
+import { streamText, stepCountIs, convertToModelMessages } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt'
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   const result = streamText({
     model: openai('gpt-4o'),
     system: contextPrompt,
-    messages,
+    messages: convertToModelMessages(messages),
     tools: chatTools,
     stopWhen: stepCountIs(5),
     onFinish: async ({ text }) => {
