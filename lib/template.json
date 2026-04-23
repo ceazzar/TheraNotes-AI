@@ -1,0 +1,93 @@
+{
+  "report_title": "Functional Capacity Assessment",
+  "sections": [
+    {
+      "name": "Report Header / Participant Details",
+      "order": 1,
+      "phase": "initial",
+      "description": "Front-matter identifying the document and person being assessed. Includes service logo, report title, participant full name, NDIS number, plan dates, date of birth, address, primary contact/NOK, clinician name and contact details, company name, and report date. Presented as a markdown table, not narrative.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "0 paragraphs (table format)",
+      "auto_generate": false
+    },
+    {
+      "name": "Table of Content",
+      "order": 2,
+      "phase": "initial",
+      "description": "[AUTO-GENERATED — do not write this section. It will be built programmatically from the report's actual headings after all sections are generated.]",
+      "expected_inputs": [],
+      "typical_length": "0 paragraphs (auto-generated)",
+      "auto_generate": true
+    },
+    {
+      "name": "Report Overview",
+      "order": 3,
+      "phase": "initial",
+      "description": "Introductory narrative explaining the purpose of the FCA, the context in which it was prepared, confidentiality statement and acknowledgement that highlighting functional difficulty is not about focusing on deficits but identifying opportunities for support. Three paragraphs: (1) accuracy disclaimer and note that further assessment may be required, (2) sensitivity acknowledgement — intention is to identify opportunities for support enabling the client to live independently, safely and meaningfully, (3) confidentiality and intended use statement.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "3 paragraphs",
+      "auto_generate": false
+    },
+    {
+      "name": "Assessment Process",
+      "order": 4,
+      "phase": "initial",
+      "description": "Brief outline of referral reason, assessment date(s), location(s), mode (telehealth/in-person), people interviewed, standardised tools administered, and a list of the five report parts that follow (Parts A-E). Establishes methodology.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "1-2 paragraphs plus list of Parts A-E",
+      "auto_generate": false
+    },
+    {
+      "name": "Part A: About The Participant",
+      "order": 5,
+      "phase": "initial",
+      "description": "Comprehensive background information needed to interpret functional findings. MUST include these core subsections with ## headings:\n\n## Primary Diagnosis and Medical History\nDetailed explanation of primary diagnosis, duration, comorbid conditions, how each condition affects functioning (not just listing diagnoses), medication details and side-effects, cognitive/executive impacts, and a summary paragraph linking all conditions to support needs. 4-6 detailed paragraphs.\n\n## Social Background\nLiving arrangement, duration, what happened before, social engagement patterns, isolation factors. 2-3 paragraphs.\n\n## Formal Supports\nAll current formal supports with descriptions, gaps in service utilisation, reasons. 2-3 paragraphs.\n\n## Informal Supports\n(Include if relevant) Presence or absence of unpaid support networks, impact on vulnerability. 1-2 paragraphs. May be omitted if no informal supports exist and this is covered in Formal Supports.\n\n## Home Environment\nPhysical accessibility, psychosocial barriers, sensory factors, suitability with/without support. 2-3 paragraphs.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "12-18 paragraphs across subsections",
+      "auto_generate": false
+    },
+    {
+      "name": "Part B: Mental Health And Psychosocial Functioning",
+      "order": 6,
+      "phase": "initial",
+      "description": "Detailed analysis of how mental health conditions affect psychosocial functioning. Begin with an overview paragraph, then choose 3-4 subsections with ## headings TAILORED TO THE PARTICIPANT'S SPECIFIC PRESENTATION. The subsection names and number should reflect what is most clinically relevant based on the clinical notes. Prefer FEWER, more substantial subsections over many thin ones.\n\nCommon subsections seen across FCA reports include (but are NOT limited to):\n- Emotional Regulation (or Emotional Regulation and Distress Tolerance)\n- Psychosocial Functioning (or Psychosocial Functioning and Relationships)\n- Cognitive Functioning and Executive Skills (or Cognition and Executive Functioning Under Stress)\n- Impact of Sleep and Fatigue on Psychosocial Functioning\n- Trauma-Related Symptoms and Safety Responses\n- Behavioural Presentation and Coping Strategies\n- Mood, Motivation and Functional Shutdown\n- Self-Concept and Internal Experience\n\nChoose subsections that best capture THIS participant's clinical picture. Do NOT use all of the above — pick only what is relevant. Do NOT add summary or meta-subsections (e.g. 'Risk and Protective Factors', 'Clinical Implications for Support Needs') — weave risk factors and clinical implications into the relevant subsections instead. Each subsection should be 2-3 detailed paragraphs.\n\nEnd with a comprehensive closing paragraph (not a separate ## heading) summarising the overall psychosocial presentation, acknowledging strengths alongside limitations, and stating the ongoing need for structured support.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "12-18 paragraphs across 3-6 subsections plus intro and closing",
+      "auto_generate": false
+    },
+    {
+      "name": "Part C: Functional Impairments Relating To Disability",
+      "order": 7,
+      "phase": "initial",
+      "description": "Detailed functional assessment across occupational domains. Include the following core subsections with ## headings, plus any additional subsections relevant to the participant:\n\nCORE (always include):\n## Mobility\nIndoor/outdoor ambulation, falls history, community mobility barriers. 1-2 paragraphs.\n\n## Activities of Daily Living (ADLs)\nMarkdown table: Task | Functional Status. Cover relevant tasks (showering, dressing, grooming, toileting, eating). Each Functional Status cell should be a detailed paragraph explaining both ability AND the support need with underlying cause.\n\n## Domestic and Community ADLs\nMarkdown table: Task | Functional Status. Cover relevant tasks (meal prep, cleaning, laundry, home maintenance, gardening, shopping, transport, meaningful occupations, medication management, financial management). Each cell a detailed paragraph.\n\nADDITIONAL (include if clinically relevant based on the clinical notes AND not already covered in depth in Part B):\n- Communication\n- Sleep / Sleep and Daily Rhythm\n- Overall Functional Presentation / Functional Summary / Participation Summary\n\nDo NOT duplicate subsections from Part B. If cognitive functioning or social functioning were covered in Part B, do NOT repeat them here — instead, briefly cross-reference Part B findings. Each additional subsection 1-2 paragraphs. End with a summary subsection tying findings together.",
+      "expected_inputs": ["clinical_notes"],
+      "typical_length": "Multiple paragraphs plus 2 detailed tables",
+      "auto_generate": false
+    },
+    {
+      "name": "Part D: Assessment Findings",
+      "order": 8,
+      "phase": "assessment",
+      "description": "Standardised assessment results with clinical interpretation. This section requires questionnaire_data containing actual assessment scores. Create a ## subsection for EACH assessment tool provided in the questionnaire data.\n\nFor each assessment:\n- Explain what the tool measures and its clinical purpose\n- Present domain scores and overall scores as provided\n- Provide clinical interpretation linking each score to functional impact and support needs observed in Parts A-C\n\nCommon tools include WHODAS 2.0, Adolescent/Adult Sensory Profile, Vineland-3, BRIEF-A, and Maladaptive Behaviour Scales.\n\nIf questionnaire_data is not provided, write a single paragraph stating that standardised assessments have not yet been completed and flag [INSUFFICIENT DATA: standardised assessment scores are required to complete this section]. Do NOT invent or guess which tools were administered.",
+      "expected_inputs": ["clinical_notes", "questionnaire_data"],
+      "typical_length": "Variable — depends on assessments administered",
+      "auto_generate": false
+    },
+    {
+      "name": "Part E: Summary & Recommendations",
+      "order": 9,
+      "phase": "summary",
+      "description": "Final section with three subsections. This section should reference findings from ALL preceding parts (A-D), including specific assessment scores from Part D when available.\n\n## NDIS Goals\nParticipant's stated NDIS goals, quoted from clinical notes. If not provided, flag [INSUFFICIENT DATA].\n\n## Summary of Functional Impairments\nComprehensive summary tying together findings from Parts A-D. Reference assessment scores where available. Emphasise reduced functional capacity rather than lack of skill. State that the presentation does not support a reduction in supports. 3-4 detailed paragraphs.\n\n## Recommendations\nNumbered, detailed recommendations with clinical justification. Consolidate into 6-8 focused recommendations — do NOT pad the list. Each should include: what is recommended, why (linking to specific findings and assessment scores), and specific focus areas (bullet points). Tailor recommendations to the participant's actual needs — do NOT use a generic checklist. Include a clinical opinion on employment capacity if relevant.",
+      "expected_inputs": ["clinical_notes", "questionnaire_data", "report_so_far"],
+      "typical_length": "15-25 paragraphs across 3 subsections",
+      "auto_generate": false
+    }
+  ],
+  "metadata": {
+    "extracted_from": 20,
+    "extraction_date": "2026-04-13",
+    "manually_refined": "2026-04-14",
+    "section_count": 9,
+    "notes": "Subsection structure is flexible — Parts B, C, and D adapt subsection names to the participant's clinical presentation. Only Part A has fixed subsection names. Table of Content is auto-generated from actual report headings."
+  }
+}
