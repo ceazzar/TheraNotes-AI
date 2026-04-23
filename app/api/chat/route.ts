@@ -66,102 +66,78 @@ export async function POST(request: NextRequest) {
             .optional()
             .describe('Any questionnaire data if provided'),
         }),
-        execute: async (input: { clinicalNotes: string; questionnaireData?: string }) => {
-          const { clinicalNotes, questionnaireData } = input
-
+        execute: async ({ clinicalNotes, questionnaireData }) => {
           try {
 
-          const { data: newReport, error: reportError } = await serviceSupabase
-            .from('reports')
-            .insert({
-              session_id: sessionId,
-              user_id: userId,
-              status: 'generating',
-              sections: {},
-            })
-            .select('id')
-            .single()
-
-          if (!newReport) return { error: `Failed to create report: ${reportError?.message || 'unknown'}` }
-
-          const reportId = newReport.id
-          const sections = template.sections.filter(
-            (s: SectionTemplate) => !s.auto_generate
-          )
-          const completedSections: Record<
-            string,
-            { title: string; content: string }
-          > = {}
-          const sectionResults: string[] = []
-
-          for (const section of sections) {
-            try {
-              const previousSections: Record<string, string> = {}
-              for (const [key, val] of Object.entries(completedSections)) {
-                previousSections[key] = val.content
-              }
-
-              const genResult = await generateSection({
-                sectionId: section.name,
-                clinicalNotes,
-                userId,
-                previousSections,
-                questionnaireData,
-              })
-
-              completedSections[genResult.sectionId] = {
-                title: genResult.title,
-                content: genResult.content,
-              }
-
-              await serviceSupabase
-                .from('reports')
-                .update({ sections: completedSections })
-                .eq('id', reportId)
-
-              sectionResults.push(
-                `✓ ${genResult.title}${genResult.insufficientData ? ' [some data gaps flagged]' : ''}`
-              )
-            } catch {
-              sectionResults.push(`✗ ${section.name}: generation failed`)
-            }
-          }
-
-          const fullReport = Object.entries(completedSections)
-            .map(([, s]) => `## ${s.title}\n\n${s.content}`)
-            .join('\n\n')
-
-          let coherenceResult = ''
-          try {
-            coherenceResult = await runCoherenceCheck({
-              fullReport,
-              clinicalNotes,
-            })
-            await serviceSupabase
+            const { data: newReport, error: reportError } = await serviceSupabase
               .from('reports')
-              .update({
-                status: 'ready',
-                coherence_result: coherenceResult,
+              .insert({
+                session_id: sessionId,
+                user_id: userId,
+                status: 'generating',
+                sections: {},
               })
-              .eq('id', reportId)
-          } catch {
+              .select('id')
+              .single()
+
+            if (!newReport) return { error: `Failed to create report: ${reportError?.message || 'unknown'}` }
+
+            const reportId = newReport.id
+            const generatableSections = template.sections.filter(
+              (s: SectionTemplate) => !s.auto_generate
+            )
+            const completedSections: Record<string, { title: string; content: string }> = {}
+            const sectionResults: string[] = []
+
+            for (const section of generatableSections) {
+              try {
+                const previousSections: Record<string, string> = {}
+                for (const [key, val] of Object.entries(completedSections)) {
+                  previousSections[key] = val.content
+                }
+
+                const genResult = await generateSection({
+                  sectionId: section.name,
+                  clinicalNotes,
+                  userId,
+                  previousSections,
+                  questionnaireData,
+                })
+
+                completedSections[genResult.sectionId] = {
+                  title: genResult.title,
+                  content: genResult.content,
+                }
+
+                await serviceSupabase
+                  .from('reports')
+                  .update({ sections: completedSections })
+                  .eq('id', reportId)
+
+                sectionResults.push(
+                  `✓ ${genResult.title}${genResult.insufficientData ? ' [some data gaps flagged]' : ''}`
+                )
+              } catch (sectionErr) {
+                const msg = sectionErr instanceof Error ? sectionErr.message : String(sectionErr)
+                sectionResults.push(`✗ ${section.name}: ${msg}`)
+              }
+            }
+
             await serviceSupabase
               .from('reports')
               .update({ status: 'ready' })
               .eq('id', reportId)
-          }
 
-          return {
-            reportId,
-            sectionsGenerated: Object.keys(completedSections).length,
-            totalSections: sections.length,
-            results: sectionResults,
-            coherenceCheck: coherenceResult || 'Completed',
-            status: 'ready',
-          }
-
+            return {
+              reportId,
+              sectionsGenerated: Object.keys(completedSections).length,
+              totalSections: generatableSections.length,
+              results: sectionResults,
+              status: 'ready',
+            }
           } catch (err) {
-            return { error: `Generation failed: ${err instanceof Error ? err.message : String(err)}` }
+            const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err)
+            return { error: `Generation failed: ${msg}` }
           }
         },
       }),
@@ -179,8 +155,7 @@ export async function POST(request: NextRequest) {
               'The user feedback describing what to change'
             ),
         }),
-        execute: async (input: { sectionId: string; feedback: string }) => {
-          const { sectionId: targetId, feedback } = input
+        execute: async ({ sectionId: targetId, feedback }) => {
 
           const { data: currentReport } = await serviceSupabase
             .from('reports')
