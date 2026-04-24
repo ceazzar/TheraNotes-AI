@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ReportSection } from './report-section'
 import { ExportButton } from './export-button'
-import { FileText, Sparkles } from 'lucide-react'
+import { FileText } from 'lucide-react'
 
 type Sections = Record<string, { title: string; content: string }>
 
@@ -16,7 +16,6 @@ export function ReportPanel({ sessionId }: ReportPanelProps) {
   const [reportId, setReportId] = useState<string | null>(null)
   const [sections, setSections] = useState<Sections>({})
   const [status, setStatus] = useState<string | null>(null)
-  const [revisingSection, setRevisingSection] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
   const fetchReport = useCallback(async () => {
@@ -48,35 +47,15 @@ export function ReportPanel({ sessionId }: ReportPanelProps) {
   }, [fetchReport])
 
   const handleRevise = useCallback(
-    async (sectionId: string, feedback: string) => {
-      if (!reportId) return
-      setRevisingSection(sectionId)
-
-      try {
-        const res = await fetch('/api/revise', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId, sectionId, feedback }),
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          setSections((prev) => ({
-            ...prev,
-            [sectionId]: {
-              ...prev[sectionId],
-              content: data.revisedContent,
-            },
-          }))
-        }
-      } finally {
-        setRevisingSection(null)
-      }
+    (sectionId: string) => {
+      // In the chat-first view, revision is handled by the revision chat panel
+      // This is a no-op placeholder — the standalone report view at /report/[id] handles this
+      console.log('Revise requested for section:', sectionId)
     },
-    [reportId]
+    []
   )
 
-  const handleDirectEdit = useCallback(
+  const handleEdit = useCallback(
     async (sectionId: string, newContent: string) => {
       if (!reportId) return
 
@@ -161,17 +140,14 @@ export function ReportPanel({ sessionId }: ReportPanelProps) {
 
               {/* Sections */}
               <div className="px-8 pb-10 md:px-12 md:pb-12">
-                {sectionEntries.map(([sectionId, section], idx) => (
+                {sectionEntries.map(([sectionId, section]) => (
                   <ReportSection
                     key={sectionId}
                     sectionId={sectionId}
-                    sectionNumber={idx + 1}
                     title={section.title}
                     content={section.content}
-                    reportId={reportId!}
                     onRevise={handleRevise}
-                    onDirectEdit={handleDirectEdit}
-                    isRevising={revisingSection === sectionId}
+                    onEdit={handleEdit}
                   />
                 ))}
               </div>
