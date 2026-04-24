@@ -13,7 +13,7 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
-        router.push('/chat')
+        router.push('/generate')
       }
     })
     return () => subscription.unsubscribe()

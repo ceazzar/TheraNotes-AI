@@ -17,11 +17,11 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto py-10 px-4">
         <div className="space-y-1 mb-8">
           <a
-            href="/chat"
+            href="/generate"
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Chat
+            Back to Generate
           </a>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
