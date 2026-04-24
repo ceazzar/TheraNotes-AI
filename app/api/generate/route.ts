@@ -59,12 +59,30 @@ export async function POST(request: NextRequest) {
   const previousSections: Record<string, string> = {}
   for (const [key, val] of Object.entries(existingSections)) previousSections[key] = val.content
 
+  // Query past corrections for this user and section type to inform generation
+  let correctionContext = ''
+  const { data: corrections } = await supabase
+    .from('corrections')
+    .select('original_text, revised_text, feedback')
+    .eq('user_id', user.id)
+    .eq('section', sectionId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  if (corrections && corrections.length > 0) {
+    const patterns = corrections.map((c, i) =>
+      `${i + 1}. Feedback: "${c.feedback}"\n   Before: "${c.original_text.slice(0, 200)}..."\n   After: "${c.revised_text.slice(0, 200)}..."`
+    ).join('\n')
+    correctionContext = `\n\nPATTERNS TO AVOID (based on past clinician corrections for this section):\n${patterns}\n\nApply these corrections proactively — do not repeat the same issues.`
+  }
+
   const result = await generateSection({
     sectionId,
-    ...(assessment ? { assessment } : { clinicalNotes }),
+    ...(assessment ? { assessment } : { clinicalNotes: (clinicalNotes ?? '') + correctionContext }),
     userId: user.id,
     previousSections,
     questionnaireData,
+    correctionContext: assessment ? correctionContext : undefined,
   })
 
   const updatedSections = {

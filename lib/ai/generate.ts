@@ -35,6 +35,8 @@ export interface GenerateSectionParams {
   userId: string
   previousSections: Record<string, string>
   questionnaireData?: string
+  /** Past correction patterns to include in the prompt context for the assessment path. */
+  correctionContext?: string
 }
 
 export interface GenerateSectionResult {
@@ -47,7 +49,7 @@ export interface GenerateSectionResult {
 export async function generateSection(
   params: GenerateSectionParams
 ): Promise<GenerateSectionResult> {
-  const { sectionId, clinicalNotes: rawNotes, assessment, userId, previousSections, questionnaireData } = params
+  const { sectionId, clinicalNotes: rawNotes, assessment, userId, previousSections, questionnaireData, correctionContext } = params
 
   // Resolve clinical notes: prefer structured assessment domain data, fall back to raw notes
   const sectionTemplate = (template.sections as SectionTemplate[]).find(
@@ -57,9 +59,14 @@ export async function generateSection(
     throw new Error(`Section "${sectionId}" not found in template`)
   }
 
-  const clinicalNotes = assessment
+  let clinicalNotes = assessment
     ? getDomainDataForSection(sectionTemplate.name, assessment)
     : (rawNotes ?? '')
+
+  // Append correction context if available (assessment path passes it separately)
+  if (correctionContext) {
+    clinicalNotes += correctionContext
+  }
 
   const ragResults = await queryRag({
     queryText: `${sectionTemplate.name}: ${clinicalNotes.slice(0, 500)}`,

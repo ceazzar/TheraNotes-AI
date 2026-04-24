@@ -155,6 +155,14 @@ export async function POST(request: NextRequest) {
     assessmentData = assessment
   }
 
+  // Query past corrections for this clinician to inform the review
+  const { data: corrections } = await supabase
+    .from('corrections')
+    .select('section, original_text, revised_text, feedback, correction_type')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
   // Build the report text for the model
   const reportText = Object.entries(sections)
     .map(
@@ -169,7 +177,16 @@ export async function POST(request: NextRequest) {
     assessmentContext = `\n\n## Assessment Data (for cross-referencing)\n\`\`\`json\n${JSON.stringify(assessmentData, null, 2)}\n\`\`\``
   }
 
-  const userMessage = `Please review the following FCA report and return your flags as a JSON array.\n\n## Report Sections\n\n${reportText}${assessmentContext}`
+  // Build correction history context
+  let correctionContext = ''
+  if (corrections && corrections.length > 0) {
+    const correctionLines = corrections.map((c, i) =>
+      `${i + 1}. Section: "${c.section}" | Type: ${c.correction_type}\n   Feedback: "${c.feedback}"\n   Change: "${c.original_text.slice(0, 150)}..." → "${c.revised_text.slice(0, 150)}..."`
+    ).join('\n')
+    correctionContext = `\n\n## Clinician Correction History\nThis clinician has received the following corrections in past reports. Flag any recurring patterns that appear in this report:\n${correctionLines}`
+  }
+
+  const userMessage = `Please review the following FCA report and return your flags as a JSON array.\n\n## Report Sections\n\n${reportText}${assessmentContext}${correctionContext}`
 
   // Call the model
   const openai = getOpenAI()
