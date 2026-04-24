@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     tools: {
       record_correction: tool({
         description: 'Record a clinician correction for future learning. Call this after a section is revised to store what changed and why.',
-        parameters: z.object({
+        inputSchema: z.object({
           sectionId: z.string().describe('The section that was revised'),
           originalText: z.string().describe('The text before revision'),
           revisedText: z.string().describe('The text after revision'),
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       }),
       get_past_corrections: tool({
         description: 'Check if this clinician has been corrected on similar issues before.',
-        parameters: z.object({
+        inputSchema: z.object({
           section: z.string().describe('The section type to check'),
         }),
         execute: async ({ section }) => {
