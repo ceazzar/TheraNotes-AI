@@ -339,6 +339,16 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
           }),
         })
 
+        // Run NDIS planner review
+        await fetch('/api/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId }),
+        }).catch((err) => {
+          // Non-blocking: planner review failure should not prevent navigation
+          console.error('Planner review failed:', err)
+        })
+
         // Update assessment status
         await supabase
           .from('assessments')

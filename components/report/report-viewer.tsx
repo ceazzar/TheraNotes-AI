@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ReportSection } from './report-section'
+import { PlannerFlags } from './planner-flags'
 import { ExportButton } from './export-button'
 import { RevisionChat } from './revision-chat'
 
@@ -16,12 +17,26 @@ type Sections = Record<
   { title: string; content: string; insufficientData?: boolean }
 >
 
+interface PlannerFlag {
+  sectionId: string
+  severity: 'critical' | 'warning' | 'suggestion'
+  issue: string
+  recommendation: string
+  ndisRationale: string
+}
+
+interface PlannerReview {
+  flags?: PlannerFlag[]
+  reviewed_at?: string
+}
+
 interface Report {
   id: string
   sections: Sections
   status: string
   assessment_id: string | null
   insufficient_data_flags: string[] | null
+  planner_review: PlannerReview | null
 }
 
 interface ReportViewerProps {
@@ -36,7 +51,7 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
   const fetchReport = useCallback(async () => {
     const { data } = await supabase
       .from('reports')
-      .select('id, sections, status, assessment_id, insufficient_data_flags')
+      .select('id, sections, status, assessment_id, insufficient_data_flags, planner_review')
       .eq('id', reportId)
       .single()
 
@@ -57,6 +72,7 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
         status: data.status,
         assessment_id: data.assessment_id,
         insufficient_data_flags: data.insufficient_data_flags,
+        planner_review: (data.planner_review as PlannerReview) ?? null,
       })
     }
   }, [reportId, supabase])
@@ -168,15 +184,22 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
           )}
 
           {sectionEntries.map(([sectionId, section]) => (
-            <ReportSection
-              key={sectionId}
-              sectionId={sectionId}
-              title={section.title}
-              content={section.content}
-              insufficientData={section.insufficientData}
-              onRevise={handleRevise}
-              onEdit={handleEdit}
-            />
+            <div key={sectionId}>
+              <ReportSection
+                sectionId={sectionId}
+                title={section.title}
+                content={section.content}
+                insufficientData={section.insufficientData}
+                onRevise={handleRevise}
+                onEdit={handleEdit}
+              />
+              {report?.planner_review?.flags && (
+                <PlannerFlags
+                  flags={report.planner_review.flags}
+                  sectionId={sectionId}
+                />
+              )}
+            </div>
           ))}
         </div>
       </div>
