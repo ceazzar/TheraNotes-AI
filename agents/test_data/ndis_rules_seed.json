@@ -1,0 +1,326 @@
+[
+  {
+    "rule_type": "support_category",
+    "section": null,
+    "content": {
+      "name": "Core Supports - Assistance with Daily Life",
+      "category_number": 1,
+      "line_item": "01_011_0107_1_1",
+      "description": "Assistance with, and/or supervising, personal daily activities to enable the participant to live as autonomously as possible. Includes assistance with daily tasks such as showering, dressing, meal preparation, and community access.",
+      "max_rate_weekday": 67.56,
+      "rate_unit": "per hour",
+      "typical_conditions": ["ASD", "psychosocial disability", "intellectual disability", "physical disability"]
+    },
+    "source": "NDIS Price Guide 2024-25",
+    "effective_date": "2024-07-01"
+  },
+  {
+    "rule_type": "support_category",
+    "section": null,
+    "content": {
+      "name": "Core Supports - Assistance with Social and Community Participation",
+      "category_number": 4,
+      "line_item": "04_104_0125_6_1",
+      "description": "Support to enable a participant to engage in community, social and recreational activities. Includes skill development for community participation and social interaction.",
+      "max_rate_weekday": 67.56,
+      "rate_unit": "per hour",
+      "typical_conditions": ["ASD", "psychosocial disability", "intellectual disability"]
+    },
+    "source": "NDIS Price Guide 2024-25",
+    "effective_date": "2024-07-01"
+  },
+  {
+    "rule_type": "support_category",
+    "section": null,
+    "content": {
+      "name": "Capacity Building - Improved Daily Living Skills",
+      "category_number": 15,
+      "line_item": "15_037_0117_1_3",
+      "description": "Assessment, training and/or therapy to assist a participant to develop skills to live as autonomously as possible. Delivered by an allied health professional.",
+      "max_rate": 214.41,
+      "rate_unit": "per hour",
+      "provider_type": "allied health professional",
+      "typical_conditions": ["ASD", "psychosocial disability", "intellectual disability", "neurological conditions"]
+    },
+    "source": "NDIS Price Guide 2024-25",
+    "effective_date": "2024-07-01"
+  },
+  {
+    "rule_type": "support_category",
+    "section": null,
+    "content": {
+      "name": "Capacity Building - Improved Relationships",
+      "category_number": 13,
+      "line_item": "13_025_0110_1_3",
+      "description": "Specialist positive behaviour support, including functional behaviour assessment, development of a behaviour support plan, and training for carers. For participants with behaviours of concern.",
+      "max_rate": 214.41,
+      "rate_unit": "per hour",
+      "provider_type": "specialist behaviour support practitioner",
+      "typical_conditions": ["ASD", "intellectual disability", "psychosocial disability"]
+    },
+    "source": "NDIS Price Guide 2024-25",
+    "effective_date": "2024-07-01"
+  },
+  {
+    "rule_type": "support_category",
+    "section": null,
+    "content": {
+      "name": "Capacity Building - Improved Health and Wellbeing",
+      "category_number": 12,
+      "line_item": "12_023_0107_1_3",
+      "description": "Dietetics, exercise physiology, and other health-related supports that build the participant's capacity. Must be directly related to disability-related health needs, not general health maintenance.",
+      "max_rate": 193.99,
+      "rate_unit": "per hour",
+      "provider_type": "allied health professional",
+      "typical_conditions": ["physical disability", "neurological conditions", "psychosocial disability"]
+    },
+    "source": "NDIS Price Guide 2024-25",
+    "effective_date": "2024-07-01"
+  },
+  {
+    "rule_type": "rejection_pattern",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "pattern": "recommendation_without_impairment_link",
+      "description": "Recommendation does not reference a specific functional impairment documented in the assessment. NDIS planners require each recommended support to be tied to an evidenced impairment.",
+      "example_bad": "It is recommended that the participant receive 5 hours per week of support worker assistance.",
+      "example_good": "Due to the significant executive functioning deficits documented in Part D (WHODAS cognition domain score: 4/5), [Name] requires 5 hours per week of support worker assistance to maintain daily routines including medication management, meal preparation, and household tasks. Without this support, [Name] is at risk of nutritional decline and medication non-compliance.",
+      "rejection_likelihood": "high"
+    },
+    "source": "NDIS Internal Review Patterns 2024",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "rejection_pattern",
+    "section": "Part D: Standardised Assessment Results",
+    "content": {
+      "pattern": "score_narrative_mismatch",
+      "description": "Standardised assessment scores contradict the narrative description. A WHODAS domain score of 0-1 paired with narrative claiming severe limitations, or a score of 3-4 paired with mild language, triggers planner scrutiny.",
+      "example_bad": "The participant scored 1 (mild) on the WHODAS mobility domain. The participant demonstrates severe and debilitating mobility impairment that prevents independent community access.",
+      "example_good": "The participant scored 1 (mild) on the WHODAS mobility domain, indicating minimal difficulty with mobility tasks in controlled environments. However, community mobility remains impacted by fatigue and sensory overload, as documented in the functional observations.",
+      "rejection_likelihood": "high"
+    },
+    "source": "NDIS Internal Review Patterns 2024",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "rejection_pattern",
+    "section": null,
+    "content": {
+      "pattern": "vague_aspirational_language",
+      "description": "Use of hedging or aspirational language instead of definitive clinical statements. Planners interpret vague language as uncertain clinical opinion and may reduce or deny funding.",
+      "trigger_phrases": [
+        "would benefit from",
+        "may need assistance",
+        "could help improve",
+        "it is recommended",
+        "appears to struggle",
+        "seems to have difficulty",
+        "might require"
+      ],
+      "replacement_patterns": {
+        "would benefit from": "requires X to maintain functional capacity in Y",
+        "may need assistance": "requires daily assistance with X due to Y",
+        "could help improve": "is clinically indicated to prevent deterioration of X",
+        "it is recommended": "clinical assessment indicates necessity for X"
+      },
+      "rejection_likelihood": "medium"
+    },
+    "source": "NDIS Internal Review Patterns 2024",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "rejection_pattern",
+    "section": null,
+    "content": {
+      "pattern": "generic_template_content",
+      "description": "Content that could apply to any participant without modification. Planners flag boilerplate text as insufficient evidence of individual assessment.",
+      "indicators": [
+        "No participant name referenced in participant-specific contexts",
+        "Recommendations identical across multiple reports",
+        "No reference to specific observed behaviours or assessment dates",
+        "Generic functional descriptions without individual examples"
+      ],
+      "rejection_likelihood": "medium"
+    },
+    "source": "NDIS Internal Review Patterns 2024",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "rejection_pattern",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "pattern": "missing_reasonable_and_necessary",
+      "description": "Recommendations fail to demonstrate the 'reasonable and necessary' criteria. Each support must show: (1) related to the disability, (2) not duplicating other services, (3) effective and beneficial, (4) represents value for money, (5) likely to be needed for the funding period.",
+      "required_elements": [
+        "Direct link to disability-related functional impairment",
+        "Evidence that mainstream services cannot meet the need",
+        "Demonstration of support effectiveness or expected outcomes",
+        "Justification of support quantity/frequency",
+        "Consideration of informal and natural supports"
+      ],
+      "rejection_likelihood": "high"
+    },
+    "source": "NDIS Act 2013 Section 34",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "funding_template",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "template_name": "Support Worker Hours Justification",
+      "template": "Based on the functional capacity assessment, [Name] requires [X] hours per week of support worker assistance for [specific tasks]. This support is necessary due to [specific impairment documented in Part X], which results in [functional impact]. Without this level of support, [consequence]. Current informal supports from [support network] provide [Y] hours per week, which is insufficient to meet [Name]'s needs because [reason]. The recommended [X] hours represents the minimum required to maintain [Name]'s safety and functional capacity.",
+      "required_variables": ["participant_name", "hours_per_week", "specific_tasks", "impairment_reference", "functional_impact", "consequence_without_support", "informal_support_detail"]
+    },
+    "source": "TheraNotes Clinical Templates",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "funding_template",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "template_name": "Allied Health Therapy Justification",
+      "template": "Clinical assessment indicates that [Name] requires [frequency] sessions of [therapy type] to address [specific functional goal]. Standardised assessment using [tool name] yielded a score of [score], indicating [severity level] impairment in [domain]. Without ongoing therapeutic intervention, [Name] is at risk of [deterioration description]. This support aligns with NDIS Capacity Building category [number] and is delivered by a registered [provider type].",
+      "required_variables": ["participant_name", "frequency", "therapy_type", "functional_goal", "assessment_tool", "score", "severity", "domain", "deterioration_risk", "category_number", "provider_type"]
+    },
+    "source": "TheraNotes Clinical Templates",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "funding_template",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "template_name": "Community Access Support Justification",
+      "template": "[Name] requires [X] hours per week of community access support to achieve their stated goal of [participant goal]. Due to [specific impairments], [Name] is unable to independently [specific activities] without support. The support worker will provide [types of assistance], enabling [Name] to develop skills in [skill areas] while maintaining community connections essential for [wellbeing outcome].",
+      "required_variables": ["participant_name", "hours_per_week", "participant_goal", "specific_impairments", "activities_needing_support", "types_of_assistance", "skill_areas", "wellbeing_outcome"]
+    },
+    "source": "TheraNotes Clinical Templates",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "funding_template",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "template_name": "Assistive Technology Justification",
+      "template": "Following assessment, [Name] requires [specific AT item] to address [functional limitation]. Current strategies of [current_approach] are inadequate because [reason]. The recommended assistive technology will enable [Name] to [functional outcome], reducing reliance on [current support] and promoting independence in [activity domain]. This item falls within NDIS AT category [category] and represents value for money compared to [alternative].",
+      "required_variables": ["participant_name", "at_item", "functional_limitation", "current_approach", "inadequacy_reason", "functional_outcome", "current_support", "activity_domain", "at_category", "alternative"]
+    },
+    "source": "TheraNotes Clinical Templates",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "funding_template",
+    "section": "Part E: Summary and Recommendations",
+    "content": {
+      "template_name": "Behaviour Support Justification",
+      "template": "[Name] presents with behaviours of concern including [specific behaviours] which impact [functional domains]. Functional behaviour assessment indicates these behaviours are maintained by [function]. Without specialist positive behaviour support, [Name] is at risk of [risk outcomes]. A comprehensive behaviour support plan, including [components], will address the underlying function of these behaviours while building [Name]'s capacity in [alternative skills].",
+      "required_variables": ["participant_name", "specific_behaviours", "functional_domains", "behaviour_function", "risk_outcomes", "plan_components", "alternative_skills"]
+    },
+    "source": "TheraNotes Clinical Templates",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "policy_threshold",
+    "section": "Part D: Standardised Assessment Results",
+    "content": {
+      "assessment_tool": "WHODAS 2.0",
+      "thresholds": {
+        "0": {"label": "None", "description": "No difficulty", "ndis_implication": "Does not support funding for this domain unless functional observations contradict"},
+        "1": {"label": "Mild", "description": "Mild difficulty", "ndis_implication": "Weak justification for dedicated supports; must be paired with strong functional observation evidence"},
+        "2": {"label": "Moderate", "description": "Moderate difficulty", "ndis_implication": "Supports justifiable when paired with functional impact evidence and participant goals"},
+        "3": {"label": "Severe", "description": "Severe difficulty", "ndis_implication": "Strong justification for ongoing supports; corresponds to significant functional limitation"},
+        "4": {"label": "Extreme/Cannot do", "description": "Extreme difficulty or cannot do", "ndis_implication": "Strongest justification; indicates complete dependence on supports in this domain"}
+      },
+      "domains": ["Cognition", "Mobility", "Self-care", "Getting along", "Life activities", "Participation"],
+      "scoring_note": "Overall disability score is calculated as the mean of domain scores, converted to a 0-100 scale. Scores above 50 indicate significant overall disability."
+    },
+    "source": "WHO Disability Assessment Schedule 2.0 Manual",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "policy_threshold",
+    "section": "Part D: Standardised Assessment Results",
+    "content": {
+      "assessment_tool": "Sensory Profile 2 (Adolescent/Adult)",
+      "thresholds": {
+        "much_less_than_most": {"percentile_range": "below 2nd", "ndis_implication": "Significant sensory processing difference; strong justification for environmental modifications and sensory-based interventions"},
+        "less_than_most": {"percentile_range": "2nd-16th", "ndis_implication": "Notable sensory processing difference; supports justifiable for targeted sensory strategies"},
+        "just_like_most": {"percentile_range": "16th-84th", "ndis_implication": "Typical range; does not independently support sensory-based recommendations"},
+        "more_than_most": {"percentile_range": "84th-98th", "ndis_implication": "Notable sensory processing difference; supports justifiable for targeted sensory strategies"},
+        "much_more_than_most": {"percentile_range": "above 98th", "ndis_implication": "Significant sensory processing difference; strong justification for comprehensive sensory supports"}
+      },
+      "quadrants": ["Sensation Seeking", "Sensation Avoiding", "Sensory Sensitivity", "Low Registration"],
+      "scoring_note": "Clinically significant patterns require scores in 'Much Less Than Most' or 'Much More Than Most' ranges. Patterns across multiple quadrants indicate pervasive sensory processing difficulties."
+    },
+    "source": "Sensory Profile 2 Manual (Dunn, 2014)",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "policy_threshold",
+    "section": "Part D: Standardised Assessment Results",
+    "content": {
+      "assessment_tool": "Kessler Psychological Distress Scale (K10)",
+      "thresholds": {
+        "10-19": {"label": "Likely to be well", "ndis_implication": "Does not independently support mental health-related functional supports"},
+        "20-24": {"label": "Likely to have a mild mental disorder", "ndis_implication": "Moderate justification when paired with functional impact evidence"},
+        "25-29": {"label": "Likely to have a moderate mental disorder", "ndis_implication": "Supports psychosocial disability-related recommendations"},
+        "30-50": {"label": "Likely to have a severe mental disorder", "ndis_implication": "Strong justification for comprehensive psychosocial supports; indicates significant functional impact"}
+      },
+      "scoring_note": "The K10 measures non-specific psychological distress over the past 30 days. Scores should be interpreted alongside functional observations and clinical interview data."
+    },
+    "source": "Kessler et al., 2002",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "advocacy_phrase",
+    "section": null,
+    "content": {
+      "category": "functional_impact",
+      "preferred_phrases": [
+        "significantly impacts [Name]'s capacity to independently manage...",
+        "without support, [Name] would be unable to...",
+        "this highlights the ongoing need for...",
+        "reduced functional capacity rather than lack of skill",
+        "demonstrates a persistent pattern of functional limitation in...",
+        "[Name]'s disability directly results in an inability to...",
+        "the cumulative impact of these impairments means that..."
+      ],
+      "avoid_phrases": [
+        "would benefit from",
+        "may need some help with",
+        "could possibly require",
+        "appears to have some difficulty",
+        "it might be helpful to"
+      ],
+      "usage_guidance": "Always tie functional impact language to specific observed behaviours and assessment evidence. Advocacy language should be factual and evidence-based, not emotionally charged."
+    },
+    "source": "NDIS Best Practice Clinical Writing Guide",
+    "effective_date": "2024-01-01"
+  },
+  {
+    "rule_type": "advocacy_phrase",
+    "section": null,
+    "content": {
+      "category": "reasonable_and_necessary",
+      "preferred_phrases": [
+        "clinical assessment indicates necessity for...",
+        "this support is reasonable and necessary because...",
+        "without this support, [Name] is at demonstrable risk of...",
+        "mainstream services are unable to meet this need because...",
+        "this represents value for money compared to...",
+        "the evidence supports that this level of support is the minimum required to...",
+        "this support directly addresses the functional impact of [Name]'s disability on..."
+      ],
+      "avoid_phrases": [
+        "it is recommended that",
+        "the participant should receive",
+        "we suggest",
+        "it would be ideal to",
+        "in an ideal world"
+      ],
+      "usage_guidance": "Every recommendation must explicitly address the reasonable and necessary criteria. Frame recommendations as clinical necessities supported by evidence, not aspirational goals."
+    },
+    "source": "NDIS Best Practice Clinical Writing Guide",
+    "effective_date": "2024-01-01"
+  }
+]
