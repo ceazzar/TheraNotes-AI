@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { streamText, convertToModelMessages } from 'ai'
+import { streamText, convertToModelMessages, tool } from 'ai'
+import { z } from 'zod'
 import { openai } from '@ai-sdk/openai'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt'
@@ -52,18 +53,14 @@ export async function POST(request: NextRequest) {
     messages: modelMessages,
     toolChoice: 'auto',
     tools: {
-      record_correction: {
+      record_correction: tool({
         description: 'Record a clinician correction for future learning. Call this after a section is revised to store what changed and why.',
-        parameters: {
-          type: 'object' as const,
-          properties: {
-            sectionId: { type: 'string', description: 'The section that was revised' },
-            originalText: { type: 'string', description: 'The text before revision' },
-            revisedText: { type: 'string', description: 'The text after revision' },
-            feedback: { type: 'string', description: 'The clinician feedback that prompted the change' },
-          },
-          required: ['sectionId', 'originalText', 'revisedText', 'feedback'],
-        },
+        parameters: z.object({
+          sectionId: z.string().describe('The section that was revised'),
+          originalText: z.string().describe('The text before revision'),
+          revisedText: z.string().describe('The text after revision'),
+          feedback: z.string().describe('The clinician feedback that prompted the change'),
+        }),
         execute: async ({ sectionId, originalText, revisedText, feedback }: {
           sectionId: string; originalText: string; revisedText: string; feedback: string
         }) => {
@@ -80,16 +77,12 @@ export async function POST(request: NextRequest) {
           }
           return { success: true, message: `Correction recorded for section "${sectionId}". This will inform future report generation.` }
         },
-      },
-      get_past_corrections: {
+      }),
+      get_past_corrections: tool({
         description: 'Check if this clinician has been corrected on similar issues before.',
-        parameters: {
-          type: 'object' as const,
-          properties: {
-            section: { type: 'string', description: 'The section type to check' },
-          },
-          required: ['section'],
-        },
+        parameters: z.object({
+          section: z.string().describe('The section type to check'),
+        }),
         execute: async ({ section }: { section: string }) => {
           const { data, error } = await supabase
             .from('corrections')
@@ -103,7 +96,7 @@ export async function POST(request: NextRequest) {
           }
           return { corrections: data ?? [] }
         },
-      },
+      }),
     },
     onFinish: async ({ text }) => {
       if (text) {
