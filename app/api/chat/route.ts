@@ -61,9 +61,7 @@ export async function POST(request: NextRequest) {
           revisedText: z.string().describe('The text after revision'),
           feedback: z.string().describe('The clinician feedback that prompted the change'),
         }),
-        execute: async ({ sectionId, originalText, revisedText, feedback }: {
-          sectionId: string; originalText: string; revisedText: string; feedback: string
-        }) => {
+        execute: async ({ sectionId, originalText, revisedText, feedback }) => {
           const { error } = await supabase.from('corrections').insert({
             user_id: userId,
             section: sectionId,
@@ -83,7 +81,7 @@ export async function POST(request: NextRequest) {
         parameters: z.object({
           section: z.string().describe('The section type to check'),
         }),
-        execute: async ({ section }: { section: string }) => {
+        execute: async ({ section }) => {
           const { data, error } = await supabase
             .from('corrections')
             .select('section, original_text, revised_text, feedback, correction_type, created_at')
