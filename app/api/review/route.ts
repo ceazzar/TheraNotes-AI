@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   const { reportId } = await request.json()
 
-  const res = await fetch(`${AGENT_SERVICE_URL}/review`, {
+  const res: Response = await fetch(`${AGENT_SERVICE_URL}/review`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

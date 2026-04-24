@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const res = await fetch(`${AGENT_SERVICE_URL}/companion`, {
+  const res: Response = await fetch(`${AGENT_SERVICE_URL}/companion`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

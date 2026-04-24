@@ -302,7 +302,7 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
     setSuggestions([])
 
     try {
-      const res = await fetch('/api/companion', {
+      const res: Response = await fetch('/api/companion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -354,7 +354,7 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
           .replace(/[^a-z0-9]+/g, '_')
           .replace(/^_|_$/g, '')
 
-        const res = await fetch('/api/generate', {
+        const res: Response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -33,7 +33,7 @@ export function ExemplarUpload({ onUploadComplete }: ExemplarUploadProps) {
         const formData = new FormData()
         formData.append('file', file)
 
-        const res = await fetch('/api/ingest', {
+        const res: Response = await fetch('/api/ingest', {
           method: 'POST',
           body: formData,
         })
