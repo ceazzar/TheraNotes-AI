@@ -14,7 +14,7 @@ This repo is the **reimagined** version of TheraNotes, consolidating two earlier
 | **Backend** | [ceazzar/fca-agent-v2](https://github.com/ceazzar/fca-agent-v2) — Python/FastAPI on Cloud Run | Generation engine ported to TypeScript in `lib/ai/` |
 | **RAG store** | ChromaDB with `all-MiniLM-L6-v2` embeddings, pre-built at Docker build time | Supabase pgvector with OpenAI `text-embedding-3-large` (1536 dims) |
 | **UI paradigm** | Form-based assessment editor with ~8 clinical domains, structured field types | Chat-based interface — paste notes, AI conversation, then generate |
-| **Generation model** | OpenAI o3 for all LLM calls (~$2-5/report) | GPT-5.4 in reasoning mode (via `GENERATION_MODEL` env var) |
+| **Generation model** | OpenAI o3 for all LLM calls (~$2-5/report) | `gpt-5.4-pro` with `reasoning.effort: "high"` — the highest-end OpenAI reasoning model |
 | **Deployment** | Vercel (frontend) + Cloud Run (backend, `australia-southeast1`) | Vercel only (monolith) |
 | **Auth** | Supabase Auth with admin approval, JWT custom claims, role-based (admin/practice_manager/clinician) | Supabase Auth with email/password |
 
@@ -28,9 +28,9 @@ The original v2.0 had a much larger feature set (client management, dashboard wi
 │                                                          │
 │  ┌──────────┐  ┌──────────────┐  ┌────────────────────┐ │
 │  │ /chat    │  │ /api/chat    │  │ /api/generate      │ │
-│  │ Chat UI  │──│ GPT-4o       │  │ Per-section engine  │ │
-│  │ + Report │  │ Streaming    │  │ RAG + prompts       │ │
-│  │ Panel    │  │ (AI SDK)     │  │ + coherence check   │ │
+│  │ Chat UI  │──│ GPT-5.4      │  │ Per-section engine  │ │
+│  │ + Report │  │ Streaming    │  │ GPT-5.4-pro         │ │
+│  │ Panel    │  │ (AI SDK)     │  │ reasoning: high     │ │
 │  ├──────────┤  ├──────────────┤  ├────────────────────┤ │
 │  │ /login   │  │ /api/ingest  │  │ /api/revise        │ │
 │  │ /settings│  │ Parse+Embed  │  │ Feedback routing    │ │
@@ -47,8 +47,8 @@ The original v2.0 had a much larger feature set (client management, dashboard wi
 ```
 
 **Two AI layers** (key design decision):
-1. **Chat agent** (GPT-4o via Vercel AI SDK) — Conversational router. Never writes report content directly. Handles follow-up questions, context gathering, and user interaction.
-2. **Generation engine** (GPT-5.4 in reasoning mode) — Writes report content using carefully crafted clinical prompts (ported from the Python fca-agent). Reasoning mode is essential here: the engine must synthesize clinical evidence, cross-reference findings across sections, and produce NDIS-compliant prose — tasks that benefit from extended chain-of-thought. Invoked per-section via `/api/generate`.
+1. **Chat agent** (`gpt-5.4` with `reasoning.effort: "none"` via Vercel AI SDK) — Conversational router. Never writes report content directly. Handles follow-up questions, context gathering, and user interaction. Flagship model intelligence without reasoning overhead keeps streaming fast.
+2. **Generation engine** (`gpt-5.4-pro` with `reasoning.effort: "high"`) — Writes report content using carefully crafted clinical prompts (ported from the Python fca-agent). This is the highest-end OpenAI model, chosen because the engine must synthesize clinical evidence, cross-reference findings across sections, and produce NDIS-compliant prose — tasks that benefit from deep chain-of-thought reasoning. Invoked per-section via `/api/generate`. Also used for revision (`/api/revise`) and coherence checks.
 
 **Two RAG layers** (both in the same `exemplar_chunks` table, differentiated by `user_id`):
 1. **Foundational** (`user_id = NULL`) — 20 pre-seeded de-identified FCA exemplar reports, shared across all users, providing clinical structure and NDIS writing patterns.
@@ -60,7 +60,7 @@ The original v2.0 had a much larger feature set (client management, dashboard wi
 - Tailwind CSS 4 + shadcn/ui (base-nova style) + Radix UI
 - Vercel AI SDK (streaming chat)
 - Supabase (PostgreSQL + pgvector + Auth + Storage)
-- OpenAI GPT-4o (chat) + GPT-5.4 reasoning mode (generation) + text-embedding-3-large
+- OpenAI `gpt-5.4` (chat, `reasoning: none`) + `gpt-5.4-pro` (generation, `reasoning: high`) + `text-embedding-3-large`
 - pnpm
 
 ## FCA Report Structure
@@ -122,8 +122,8 @@ Foundational exemplars seeded via `scripts/seed-foundational.ts` (20 de-identifi
 app/
   page.tsx                    Root redirect: auth check → /chat or /login
   api/
-    chat/route.ts             Streaming chat with GPT-4o via Vercel AI SDK
-    generate/route.ts         Per-section generation with GPT-5.4 reasoning mode
+    chat/route.ts             Streaming chat with gpt-5.4 (reasoning: none) via Vercel AI SDK
+    generate/route.ts         Per-section generation with gpt-5.4-pro (reasoning: high)
     ingest/route.ts           File upload → parse → chunk → embed → store
     revise/route.ts           Section revision + re-coherence
   chat/page.tsx               Main app page — chat + report side panel
@@ -184,7 +184,8 @@ pgvector similarity search via `match_exemplar_chunks` stored function (cosine d
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | For server-side operations |
 | `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `GENERATION_MODEL` | No | Defaults to `gpt-5.4` (reasoning mode for clinical synthesis) |
+| `CHAT_MODEL` | No | Defaults to `gpt-5.4` (with `reasoning.effort: "none"`) |
+| `GENERATION_MODEL` | No | Defaults to `gpt-5.4-pro` (with `reasoning.effort: "high"`) |
 
 ## Setup
 
@@ -207,7 +208,7 @@ Per the session log, Task 17 (smoke test + deploy) is pending. The app needs:
 ## Known Technical Notes
 
 - `chat-tools.ts` defines Zod tool schemas but they are **not wired** into the `/api/chat` route — the chat route doesn't pass tools to `streamText()`. Report generation is triggered client-side by keyword matching on user input.
-- The generation engine should use GPT-5.4 in reasoning mode (the code may still default to `gpt-4o` — set `GENERATION_MODEL=gpt-5.4` and ensure reasoning mode is enabled in the API call).
+- The code may still default to `gpt-4o` — update to use `gpt-5.4` for chat (with `reasoning.effort: "none"`) and `gpt-5.4-pro` for generation/revision/coherence (with `reasoning.effort: "high"`). Use the OpenAI Responses API (not Chat Completions) to get full reasoning support.
 - Embedder uses 1536 dimensions (the design spec called for 3072 from `text-embedding-3-large` but the migration schema uses `vector(1536)`).
 - `pnpm-workspace.yaml` exists but this is a single package, not a monorepo.
 
