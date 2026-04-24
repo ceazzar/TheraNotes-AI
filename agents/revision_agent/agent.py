@@ -9,6 +9,7 @@ correction for future learning.
 Uses the OpenAI Agents SDK pattern for standalone local testing.
 """
 
+import os
 import json
 from agents import Agent, Runner, function_tool
 
@@ -218,7 +219,7 @@ def create_revision_agent() -> Agent:
     return Agent(
         name="Revision Agent",
         instructions=SYSTEM_PROMPT,
-        model="gpt-4o",
+        model=os.environ.get("CHAT_MODEL", "gpt-5.4"),
         tools=[
             get_report_sections,
             get_past_corrections,
@@ -262,26 +263,44 @@ async def run_revision(
             "5. Record the correction for future learning\n"
             "6. Return the result as JSON"
         ),
+        max_turns=10,
     )
 
     response_text = result.final_output
-    try:
-        if "```json" in response_text:
-            json_str = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            json_str = response_text.split("```")[1].split("```")[0].strip()
-        else:
-            json_str = response_text.strip()
-        output = json.loads(json_str)
-    except (json.JSONDecodeError, IndexError):
-        output = {
-            "revised_content": response_text,
-            "changes_made": [],
-            "cross_section_impacts": [],
-            "patterns_applied": [],
-        }
+    output = _parse_json_output(response_text, raw_fallback=response_text)
 
     return output
+
+
+def _parse_json_output(text: str, raw_fallback: str = "") -> dict:
+    """Robustly extract JSON dict from an LLM response that may contain markdown fences."""
+    default = {
+        "revised_content": raw_fallback,
+        "changes_made": [],
+        "cross_section_impacts": [],
+        "patterns_applied": [],
+    }
+
+    # Try direct parse first (fastest path)
+    try:
+        parsed = json.loads(text.strip())
+        if isinstance(parsed, dict):
+            return parsed
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Try extracting from markdown code fences
+    for fence in ("```json", "```"):
+        if fence in text:
+            try:
+                json_str = text.split(fence, 1)[1].split("```", 1)[0].strip()
+                parsed = json.loads(json_str)
+                if isinstance(parsed, dict):
+                    return parsed
+            except (json.JSONDecodeError, IndexError, AttributeError):
+                continue
+
+    return default
 
 
 if __name__ == "__main__":

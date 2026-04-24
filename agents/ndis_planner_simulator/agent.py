@@ -8,6 +8,7 @@ a plan review meeting.
 Uses the OpenAI Agents SDK pattern for standalone local testing.
 """
 
+import os
 import json
 from agents import Agent, Runner
 
@@ -127,7 +128,7 @@ def create_ndis_planner_agent() -> Agent:
     return Agent(
         name="NDIS Planner Simulator",
         instructions=SYSTEM_PROMPT,
-        model="gpt-4o",
+        model=os.environ.get("GENERATION_MODEL", "gpt-5.4-pro"),
         tools=[
             get_report_sections,
             get_assessment_data,
@@ -155,23 +156,39 @@ async def run_planner_review(report_id: str) -> list[dict]:
         input=f"Review the FCA report with ID: {report_id}. "
         "Use the available tools to load the report sections and assessment data, "
         "then perform a thorough planner review. Return your findings as a JSON array of flags.",
+        max_turns=10,
     )
 
     # Parse the JSON output from the agent's response
     response_text = result.final_output
-    try:
-        # Try to extract JSON from the response
-        if "```json" in response_text:
-            json_str = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            json_str = response_text.split("```")[1].split("```")[0].strip()
-        else:
-            json_str = response_text.strip()
-        flags = json.loads(json_str)
-    except (json.JSONDecodeError, IndexError):
-        flags = []
+    flags = _parse_json_output(response_text, fallback=[])
 
     return flags
+
+
+def _parse_json_output(text: str, fallback=None):
+    """Robustly extract JSON from an LLM response that may contain markdown fences."""
+    if fallback is None:
+        fallback = []
+
+    # Try direct parse first (fastest path)
+    try:
+        parsed = json.loads(text.strip())
+        return parsed if isinstance(parsed, list) else parsed.get("flags", fallback)
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Try extracting from markdown code fences
+    for fence in ("```json", "```"):
+        if fence in text:
+            try:
+                json_str = text.split(fence, 1)[1].split("```", 1)[0].strip()
+                parsed = json.loads(json_str)
+                return parsed if isinstance(parsed, list) else parsed.get("flags", fallback)
+            except (json.JSONDecodeError, IndexError, AttributeError):
+                continue
+
+    return fallback
 
 
 if __name__ == "__main__":

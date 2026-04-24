@@ -8,6 +8,7 @@ gaps, and documentation suggestions.
 Uses the OpenAI Agents SDK pattern for standalone local testing.
 """
 
+import os
 import json
 from agents import Agent, Runner
 
@@ -121,7 +122,7 @@ def create_companion_agent(lightweight: bool = False) -> Agent:
     return Agent(
         name="Assessment Companion",
         instructions=LIGHTWEIGHT_PROMPT if lightweight else SYSTEM_PROMPT,
-        model="gpt-4o",
+        model=os.environ.get("CHAT_MODEL", "gpt-5.4"),
         tools=[
             get_assessment_data,
             get_clinician_profile,
@@ -151,22 +152,39 @@ async def run_companion_check(
         input=f"Perform a {mode} on the assessment with ID: {assessment_id}. "
         "Use the available tools to load the assessment data and domain completeness, "
         "then review the data and return your suggestions as a JSON array.",
+        max_turns=10,
     )
 
     # Parse the JSON output from the agent's response
     response_text = result.final_output
-    try:
-        if "```json" in response_text:
-            json_str = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            json_str = response_text.split("```")[1].split("```")[0].strip()
-        else:
-            json_str = response_text.strip()
-        suggestions = json.loads(json_str)
-    except (json.JSONDecodeError, IndexError):
-        suggestions = []
+    suggestions = _parse_json_output(response_text, fallback=[])
 
     return suggestions
+
+
+def _parse_json_output(text: str, fallback=None):
+    """Robustly extract JSON from an LLM response that may contain markdown fences."""
+    if fallback is None:
+        fallback = []
+
+    # Try direct parse first (fastest path)
+    try:
+        parsed = json.loads(text.strip())
+        return parsed if isinstance(parsed, list) else parsed.get("suggestions", fallback)
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Try extracting from markdown code fences
+    for fence in ("```json", "```"):
+        if fence in text:
+            try:
+                json_str = text.split(fence, 1)[1].split("```", 1)[0].strip()
+                parsed = json.loads(json_str)
+                return parsed if isinstance(parsed, list) else parsed.get("suggestions", fallback)
+            except (json.JSONDecodeError, IndexError, AttributeError):
+                continue
+
+    return fallback
 
 
 if __name__ == "__main__":
