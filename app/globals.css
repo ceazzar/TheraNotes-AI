@@ -1656,4 +1656,11 @@
   .tn-flag-span {
     text-decoration: none !important;
   }
+  .tn-doc h2 {
+    page-break-before: always;
+  }
+  .tn-doc h2:first-child {
+    page-break-before: avoid;
+  }
+  .tn-refine-result { display: none !important; }
 }

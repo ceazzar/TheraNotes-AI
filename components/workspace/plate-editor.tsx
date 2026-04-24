@@ -4,6 +4,7 @@ import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { Plate, usePlateEditor, type PlateEditor as PlateEditorType } from 'platejs/react'
 import type { Value } from 'platejs'
 import { editorPlugins } from '@/lib/editor/plugins'
+import { EditorToolbar } from './editor-toolbar'
 
 interface PlateEditorProps {
   initialValue: Value
@@ -34,6 +35,7 @@ export const PlateDocEditor = forwardRef<PlateEditorHandle, PlateEditorProps>(
     return (
       <div className="tn-doc">
         <Plate editor={editor} onChange={handleChange}>
+          <EditorToolbar />
           <div
             contentEditable={!readOnly}
             suppressContentEditableWarning

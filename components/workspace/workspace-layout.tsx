@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { ChevronLeft, Search, Shield } from 'lucide-react'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { saveAs } from 'file-saver'
 import { createClient } from '@/lib/supabase/client'
 import { reportToPlate } from '@/lib/editor/report-to-plate'
 import { plateToSections } from '@/lib/editor/plate-to-sections'
@@ -169,6 +171,47 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     if (first) jumpTo(first.section)
   }, [flags, jumpTo])
 
+  const handleExportDocx = useCallback(async () => {
+    const editor = editorRef.current?.editor
+    if (!editor) return
+
+    const sections = plateToSections(editor.children, sectionKeys, editor)
+    const children: Paragraph[] = [
+      new Paragraph({
+        text: 'Functional Capacity Assessment Report',
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      }),
+    ]
+
+    for (const [, section] of Object.entries(sections)) {
+      children.push(
+        new Paragraph({
+          text: section.title,
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 200 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+          },
+        })
+      )
+      for (const para of section.content.split('\n\n')) {
+        if (!para.trim()) continue
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: para.trim(), size: 22 })],
+            spacing: { after: 120 },
+          })
+        )
+      }
+    }
+
+    const doc = new Document({ sections: [{ children }] })
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, `FCA-${participant?.name ?? 'Report'}.docx`)
+  }, [sectionKeys, participant])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--tn-bg)' }}>
@@ -255,7 +298,10 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         </div>
 
         {/* Footer */}
-        <WorkspaceFooter saving={saveStatus === 'saving'} />
+        <WorkspaceFooter
+          saving={saveStatus === 'saving'}
+          onExportDocx={handleExportDocx}
+        />
       </div>
     </div>
   )
