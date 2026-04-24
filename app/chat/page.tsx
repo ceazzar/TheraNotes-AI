@@ -8,7 +8,7 @@ import { SessionSidebar } from '@/components/chat/session-sidebar'
 import { MessageList } from '@/components/chat/message-list'
 import { ChatInput } from '@/components/chat/chat-input'
 import { ReportPanel } from '@/components/report/report-panel'
-import { Menu, FileText } from 'lucide-react'
+import { Menu, FileText, MessageSquare, Sparkles } from 'lucide-react'
 import template from '@/lib/template.json'
 
 interface SectionTemplate {
@@ -19,8 +19,9 @@ interface SectionTemplate {
 export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
-  const [showSidebar, setShowSidebar] = useState(false)
-  const [showReport, setShowReport] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'report'>('chat')
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   const supabase = useMemo(() => createClient(), [])
@@ -104,7 +105,7 @@ export default function ChatPage() {
       setSessionId(data.id)
       setMessages([])
       setInput('')
-      setShowSidebar(false)
+      setShowMobileSidebar(false)
     }
   }, [supabase, setMessages])
 
@@ -112,7 +113,7 @@ export default function ChatPage() {
     async (id: string) => {
       setSessionId(id)
       setInput('')
-      setShowSidebar(false)
+      setShowMobileSidebar(false)
 
       const { data: msgData } = await supabase
         .from('messages')
@@ -200,7 +201,6 @@ export default function ChatPage() {
 
     lastUserMessageRef.current = input
 
-    // Detect generation intent from user message
     const lowerInput = input.toLowerCase()
     const wantsGeneration =
       lowerInput.includes('generate') ||
@@ -220,53 +220,64 @@ export default function ChatPage() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="flex md:hidden items-center justify-between p-3 border-b border-border bg-background shrink-0">
+      <div className="flex md:hidden items-center justify-between p-3 border-b border-[#E2E8F0] bg-white shrink-0 w-full absolute top-0 left-0 right-0 z-30">
         <button
-          onClick={() => {
-            setShowSidebar(!showSidebar)
-            setShowReport(false)
-          }}
-          className="p-2 rounded-md hover:bg-accent"
+          onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F1F5F9]"
         >
-          <Menu className="size-5" />
+          <Menu className="size-4" />
         </button>
-        <span className="text-sm font-semibold">TheraNotes AI</span>
-        <button
-          onClick={() => {
-            setShowReport(!showReport)
-            setShowSidebar(false)
-          }}
-          className="p-2 rounded-md hover:bg-accent"
-        >
-          <FileText className="size-5" />
-        </button>
+        <div className="flex-1 min-w-0 px-3">
+          <div className="text-[13px] font-semibold text-[#0F172A] truncate text-center">
+            TheraNotes AI
+          </div>
+          {isGeneratingReport && (
+            <div className="flex items-center justify-center gap-1 text-[10.5px] text-[#3B82F6]">
+              <span className="h-[5px] w-[5px] rounded-full bg-[#3B82F6] animate-pulse" />
+              Generating
+            </div>
+          )}
+        </div>
+        {/* Mobile tabs */}
+        <div className="flex rounded-lg border border-[#E2E8F0] overflow-hidden">
+          <button
+            onClick={() => setMobileTab('chat')}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium ${
+              mobileTab === 'chat'
+                ? 'bg-[#0F172A] text-white'
+                : 'bg-white text-[#64748B]'
+            }`}
+          >
+            <MessageSquare className="size-3" />
+            Chat
+          </button>
+          <button
+            onClick={() => setMobileTab('report')}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium ${
+              mobileTab === 'report'
+                ? 'bg-[#0F172A] text-white'
+                : 'bg-white text-[#64748B]'
+            }`}
+          >
+            <FileText className="size-3" />
+            Report
+          </button>
+        </div>
       </div>
 
-      {/* Mobile overlay panels */}
-      {showSidebar && (
+      {/* Mobile sidebar overlay */}
+      {showMobileSidebar && (
         <div className="absolute inset-0 z-50 md:hidden">
           <div
             className="absolute inset-0 bg-black/50"
-            onClick={() => setShowSidebar(false)}
+            onClick={() => setShowMobileSidebar(false)}
           />
-          <div className="relative z-10 h-full w-72">
+          <div className="relative z-10 h-full w-[268px]">
             <SessionSidebar
               currentSessionId={sessionId}
               onSelectSession={loadSession}
               onNewSession={createSession}
             />
-          </div>
-        </div>
-      )}
-
-      {showReport && (
-        <div className="absolute inset-0 z-50 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setShowReport(false)}
-          />
-          <div className="relative z-10 h-full w-80 ml-auto">
-            <ReportPanel sessionId={sessionId} />
           </div>
         </div>
       )}
@@ -277,29 +288,73 @@ export default function ChatPage() {
           currentSessionId={sessionId}
           onSelectSession={loadSession}
           onNewSession={createSession}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
 
-      {/* Chat area */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <MessageList messages={messages} status={status} />
-        {isGeneratingReport && generationStatus && (
-          <div className="mx-4 mb-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200 animate-pulse">
-            {generationStatus}
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col min-w-0 md:flex-row">
+        {/* Chat panel — 40% on desktop */}
+        <div
+          className={`flex flex-col border-r border-[#E2E8F0] ${
+            mobileTab === 'report' ? 'hidden md:flex' : 'flex'
+          } md:w-[40%] md:min-w-[380px] pt-[52px] md:pt-0`}
+          style={{ background: '#FAF9F5' }}
+        >
+          {/* Chat sub-header */}
+          <div className="hidden md:flex items-center gap-2 border-b border-[#E2E8F0] bg-white px-5 py-2.5 text-xs text-[#64748B]">
+            <MessageSquare className="size-[13px]" />
+            <span className="flex-1 font-medium">Conversation</span>
           </div>
-        )}
-        <ChatInput
-          value={input}
-          onChange={setInput}
-          onSubmit={onSubmit}
-          isLoading={isGenerating || isGeneratingReport}
-        />
+
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <MessageList messages={messages} status={status} />
+            {isGeneratingReport && generationStatus && (
+              <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] p-3 text-[12.5px] font-medium text-[#2563EB]">
+                <div
+                  className="h-4 w-4 shrink-0 rounded-full border-2 border-[#3B82F6]"
+                  style={{
+                    borderTopColor: 'transparent',
+                    animation: 'tn-spin 0.8s linear infinite',
+                  }}
+                />
+                {generationStatus}
+              </div>
+            )}
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSubmit={onSubmit}
+              isLoading={isGenerating || isGeneratingReport}
+            />
+          </div>
+        </div>
+
+        {/* Report panel — 60% on desktop */}
+        <div
+          className={`flex-1 overflow-hidden ${
+            mobileTab === 'chat' ? 'hidden md:block' : 'block'
+          } pt-[52px] md:pt-0`}
+          style={{ background: '#F5F4F0' }}
+        >
+          <ReportPanel sessionId={sessionId} />
+        </div>
       </div>
 
-      {/* Desktop report panel */}
-      <div className="hidden md:block">
-        <ReportPanel sessionId={sessionId} />
-      </div>
+      {/* Mobile floating AI button (visible on report tab) */}
+      {mobileTab === 'report' && (
+        <button
+          onClick={() => setMobileTab('chat')}
+          className="fixed bottom-6 right-4 z-40 md:hidden flex items-center gap-2 rounded-full border-0 px-5 py-3 text-[13.5px] font-medium text-white shadow-[0_10px_25px_-5px_rgba(15,23,42,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]"
+          style={{ background: '#0F172A' }}
+        >
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#3B82F6] to-[#2563EB]">
+            <Sparkles className="size-3 text-white" />
+          </div>
+          Ask AI
+        </button>
+      )}
     </>
   )
 }

@@ -1,104 +1,13 @@
 'use client'
 
 import type { UIMessage } from 'ai'
-import {
-  ChatContainerRoot,
-  ChatContainerContent,
-  ChatContainerScrollAnchor,
-} from '@/components/ui/chat-container'
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-} from '@/components/ui/message'
-import { Loader } from '@/components/ui/loader'
+import { Sparkles } from 'lucide-react'
 
 function getMessageText(message: UIMessage): string {
   return message.parts
     .filter((p) => p.type === 'text')
     .map((p) => p.text)
     .join('')
-}
-
-interface ToolInvocationInfo {
-  toolName: string
-  state: string
-  result?: unknown
-}
-
-function getToolInvocations(message: UIMessage): ToolInvocationInfo[] {
-  return message.parts
-    .filter((p) => p.type === 'tool-invocation')
-    .map((p) => {
-      const invocation = (p as unknown as { toolInvocation: ToolInvocationInfo }).toolInvocation
-      return invocation
-    })
-}
-
-function ToolStatus({ invocation }: { invocation: ToolInvocationInfo }) {
-  const { toolName, state, result } = invocation
-
-  const labels: Record<string, string> = {
-    generate_report: 'Generating FCA report',
-    revise_section: 'Revising section',
-    get_report_status: 'Checking report status',
-  }
-
-  const label = labels[toolName] ?? toolName
-
-  if (state === 'call' || state === 'partial-call') {
-    return (
-      <div className="flex items-center gap-2 rounded-lg bg-secondary p-3">
-        <Loader variant="typing" size="sm" />
-        <span className="text-sm text-muted-foreground">{label}...</span>
-      </div>
-    )
-  }
-
-  if (state === 'result' && result) {
-    const r = result as Record<string, unknown>
-
-    if (toolName === 'generate_report' && r.sectionsGenerated) {
-      return (
-        <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-3 space-y-1">
-          <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            Report generated — {String(r.sectionsGenerated)}/{String(r.totalSections)} sections
-          </p>
-          {Array.isArray(r.results) && (
-            <ul className="text-xs text-green-700 dark:text-green-300 space-y-0.5">
-              {r.results.map((line: string, i: number) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )
-    }
-
-    if (toolName === 'generate_report' && r.error) {
-      return (
-        <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
-          <p className="text-sm text-red-800 dark:text-red-200">
-            Generation failed: {String(r.error)}
-          </p>
-        </div>
-      )
-    }
-
-    if (toolName === 'revise_section' && r.revised) {
-      return (
-        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3">
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            Revised: {String(r.sectionTitle)}
-          </p>
-        </div>
-      )
-    }
-
-    return null
-  }
-
-  return null
 }
 
 interface MessageListProps {
@@ -111,76 +20,79 @@ export function MessageList({ messages, status }: MessageListProps) {
 
   if (messages.length === 0 && !isGenerating) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="text-center space-y-2">
-          <h2 className="text-lg font-medium text-foreground">
-            Start a conversation
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Paste or describe your clinical notes and I will help generate an
-            FCA report section by section.
-          </p>
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="text-center space-y-4 max-w-[380px]">
+          <div className="mx-auto flex h-[60px] w-[60px] items-center justify-center rounded-2xl bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-[#60A5FA] shadow-[0_8px_24px_-8px_rgba(15,23,42,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]">
+            <Sparkles className="size-[26px]" />
+          </div>
+          <div>
+            <h2 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">
+              Ready when you are
+            </h2>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#64748B]">
+              Paste your clinical notes, upload a transcript, or dictate your
+              session. I&apos;ll generate an NDIS-compliant FCA draft.
+            </p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <ChatContainerRoot className="flex-1">
-      <ChatContainerContent className="gap-4 p-4 max-w-3xl mx-auto">
-        {messages.map((message) => {
-          const text = getMessageText(message)
-          const toolParts = getToolInvocations(message)
-          const hasContent = text || toolParts.length > 0
+    <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+      {messages.map((message) => {
+        const text = getMessageText(message)
+        if (!text) return null
 
-          if (!hasContent) return null
-
+        if (message.role === 'user') {
           return (
-            <Message
-              key={message.id}
-              className={
-                message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-              }
-            >
-              <MessageAvatar
-                alt={message.role === 'user' ? 'You' : 'AI'}
-                fallback={message.role === 'user' ? 'U' : 'AI'}
-              />
-              <div className="flex flex-col gap-2 min-w-0">
-                {text && (
-                  <MessageContent
-                    markdown={message.role === 'assistant'}
-                    className={
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary text-secondary-foreground'
-                    }
-                  >
-                    {text}
-                  </MessageContent>
-                )}
-                {toolParts.map((inv, i) => (
-                  <ToolStatus key={i} invocation={inv} />
-                ))}
+            <div key={message.id} className="flex justify-end">
+              <div className="max-w-[88%]">
+                <div className="rounded-[14px_14px_4px_14px] bg-[#2563EB] px-3.5 py-3 text-[13.5px] leading-relaxed text-white shadow-[0_1px_2px_rgba(37,99,235,0.2)]">
+                  {text}
+                </div>
               </div>
-            </Message>
+            </div>
           )
-        })}
-        {isGenerating &&
-          messages.length > 0 &&
-          messages[messages.length - 1].role === 'user' && (
-            <Message>
-              <MessageAvatar alt="AI" fallback="AI" />
-              <div className="flex items-center gap-2 rounded-lg bg-secondary p-3">
-                <Loader variant="typing" size="sm" />
-                <span className="text-sm text-muted-foreground">
-                  Thinking...
-                </span>
+        }
+
+        return (
+          <div key={message.id} className="flex gap-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-[#60A5FA] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <Sparkles className="size-3" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="mb-1 text-[11.5px] font-medium text-[#64748B]">
+                TheraNotes AI
               </div>
-            </Message>
-          )}
-        <ChatContainerScrollAnchor />
-      </ChatContainerContent>
-    </ChatContainerRoot>
+              <div className="text-[13.5px] leading-[1.6] text-[#0F172A]">
+                {text}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {isGenerating &&
+        messages.length > 0 &&
+        messages[messages.length - 1].role === 'user' && (
+          <div className="flex gap-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-[#60A5FA]">
+              <Sparkles className="size-3" />
+            </div>
+            <div className="flex items-center gap-2 rounded-lg bg-[#F1F5F9] px-3 py-2">
+              <div
+                className="h-4 w-4 rounded-full border-2 border-[#3B82F6]"
+                style={{
+                  borderTopColor: 'transparent',
+                  animation: 'tn-spin 0.8s linear infinite',
+                }}
+              />
+              <span className="text-[12.5px] text-[#64748B]">Thinking…</span>
+            </div>
+          </div>
+        )}
+    </div>
   )
 }
