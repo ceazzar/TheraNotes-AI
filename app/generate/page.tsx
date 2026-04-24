@@ -112,7 +112,7 @@ export default function GeneratePage() {
         const section = generatableSections[i]
         setCurrentSectionName(section.name)
 
-        const response = await fetch('/api/generate', {
+        const response: Response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
