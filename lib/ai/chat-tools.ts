@@ -20,4 +20,19 @@ export const chatTools = {
     description: 'Check the current status of the report being generated.',
     inputSchema: z.object({}),
   }),
+  record_correction: tool({
+    description: 'Record a clinician correction for future learning. Call this after a section is revised to store what changed and why.',
+    inputSchema: z.object({
+      sectionId: z.string().describe('The section that was revised'),
+      originalText: z.string().describe('The text before revision'),
+      revisedText: z.string().describe('The text after revision'),
+      feedback: z.string().describe('The clinician feedback that prompted the change'),
+    }),
+  }),
+  get_past_corrections: tool({
+    description: 'Check if this clinician has been corrected on similar issues before.',
+    inputSchema: z.object({
+      section: z.string().describe('The section type to check'),
+    }),
+  }),
 }

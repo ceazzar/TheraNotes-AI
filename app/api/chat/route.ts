@@ -44,10 +44,67 @@ export async function POST(request: NextRequest) {
 
   const modelMessages = await convertToModelMessages(messages)
 
+  const userId = user.id
+
   const result = streamText({
     model: openai('gpt-4o'),
     system: contextPrompt,
     messages: modelMessages,
+    toolChoice: 'auto',
+    tools: {
+      record_correction: {
+        description: 'Record a clinician correction for future learning. Call this after a section is revised to store what changed and why.',
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            sectionId: { type: 'string', description: 'The section that was revised' },
+            originalText: { type: 'string', description: 'The text before revision' },
+            revisedText: { type: 'string', description: 'The text after revision' },
+            feedback: { type: 'string', description: 'The clinician feedback that prompted the change' },
+          },
+          required: ['sectionId', 'originalText', 'revisedText', 'feedback'],
+        },
+        execute: async ({ sectionId, originalText, revisedText, feedback }: {
+          sectionId: string; originalText: string; revisedText: string; feedback: string
+        }) => {
+          const { error } = await supabase.from('corrections').insert({
+            user_id: userId,
+            section: sectionId,
+            original_text: originalText,
+            revised_text: revisedText,
+            feedback,
+            correction_type: 'revision',
+          })
+          if (error) {
+            return { success: false, error: error.message }
+          }
+          return { success: true, message: `Correction recorded for section "${sectionId}". This will inform future report generation.` }
+        },
+      },
+      get_past_corrections: {
+        description: 'Check if this clinician has been corrected on similar issues before.',
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            section: { type: 'string', description: 'The section type to check' },
+          },
+          required: ['section'],
+        },
+        execute: async ({ section }: { section: string }) => {
+          const { data, error } = await supabase
+            .from('corrections')
+            .select('section, original_text, revised_text, feedback, correction_type, created_at')
+            .eq('user_id', userId)
+            .eq('section', section)
+            .order('created_at', { ascending: false })
+            .limit(5)
+          if (error) {
+            return { corrections: [], error: error.message }
+          }
+          return { corrections: data ?? [] }
+        },
+      },
+    },
     onFinish: async ({ text }) => {
       if (text) {
         const cleanText = text.replace('[GENERATE_REPORT]\n', '').trim()
