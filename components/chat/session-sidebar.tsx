@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
@@ -33,7 +33,7 @@ export function SessionSidebar({
   onToggleCollapse,
 }: SessionSidebarProps) {
   const [sessions, setSessions] = useState<Session[]>([])
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     async function loadSessions() {

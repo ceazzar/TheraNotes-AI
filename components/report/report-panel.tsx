@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ReportSection } from './report-section'
 import { ExportButton } from './export-button'
@@ -17,7 +17,7 @@ export function ReportPanel({ sessionId }: ReportPanelProps) {
   const [sections, setSections] = useState<Sections>({})
   const [status, setStatus] = useState<string | null>(null)
   const [revisingSection, setRevisingSection] = useState<string | null>(null)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchReport = useCallback(async () => {
     if (!sessionId) return
