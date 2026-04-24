@@ -6,8 +6,7 @@ import { Sparkles } from 'lucide-react'
 
 const navItems = [
   { label: 'Generate', href: '/generate' },
-  { label: 'Reports', href: '/assessments' },
-  { label: 'Clients', href: '#' },
+  { label: 'Reports', href: '/reports' },
   { label: 'Settings', href: '/settings' },
 ]
 
@@ -29,7 +28,8 @@ export function Topbar() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href === '/generate' && pathname === '/')
+            (item.href === '/generate' && pathname === '/') ||
+            (item.href === '/reports' && pathname.startsWith('/report'))
           return (
             <Link
               key={item.href}

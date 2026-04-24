@@ -149,15 +149,13 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {report?.assessment_id && (
-                <Link
-                  href={`/assessment/${report.assessment_id}`}
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
-                >
-                  <ArrowLeft className="size-3.5" />
-                  Back to Assessment
-                </Link>
-              )}
+              <Link
+                href="/reports"
+                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
+              >
+                <ArrowLeft className="size-3.5" />
+                Back to Reports
+              </Link>
               {report && sectionEntries.length > 0 && (
                 <ExportButton sections={report.sections} />
               )}
