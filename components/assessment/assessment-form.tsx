@@ -6,12 +6,22 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { DomainSidebar, type DomainKey } from './domain-sidebar'
 import { ParticipantDetails } from './participant-details'
 import { ClinicalDomain, type ClinicalField } from './clinical-domain'
 import { FunctionalDomain } from './functional-domain'
 import { StandardizedScores } from './standardized-scores'
+import { AlertTriangle, Info, X } from 'lucide-react'
 import template from '@/lib/template.json'
+
+interface CompanionSuggestion {
+  domain: string
+  severity: 'info' | 'warning'
+  message: string
+  recommendation: string
+}
 
 // Domain field definitions for ClinicalDomain usage
 const DOMAIN_CONFIGS: Record<
@@ -106,6 +116,10 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
   const [functionalDomains, setFunctionalDomains] = useState<Record<string, Record<string, string>>>({})
   const [standardizedScores, setStandardizedScores] = useState<Record<string, Record<string, string> | string>>({})
   const [clinicalNotes, setClinicalNotes] = useState('')
+
+  // Companion suggestions state
+  const [suggestions, setSuggestions] = useState<CompanionSuggestion[]>([])
+  const [checkingReadiness, setCheckingReadiness] = useState(false)
 
   // Debounce save timer
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -280,6 +294,38 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
     },
     [debouncedSave]
   )
+
+  // Companion readiness check handler
+  const handleCheckReadiness = useCallback(async () => {
+    if (checkingReadiness) return
+    setCheckingReadiness(true)
+    setSuggestions([])
+
+    try {
+      const res = await fetch('/api/companion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId,
+          trigger: 'readiness_check',
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setSuggestions(data.suggestions ?? [])
+      }
+    } catch (error) {
+      console.error('Companion check failed:', error)
+    } finally {
+      setCheckingReadiness(false)
+    }
+  }, [assessmentId, checkingReadiness])
+
+  // Dismiss a single suggestion
+  const dismissSuggestion = useCallback((index: number) => {
+    setSuggestions((prev) => prev.filter((_, i) => i !== index))
+  }, [])
 
   // Count complete domains
   const completeCount = Object.values(domainStatus).filter((s) => s === 'complete').length
@@ -469,6 +515,8 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
         domainStatus={domainStatus}
         onGenerate={handleGenerate}
         canGenerate={canGenerate && !generating}
+        onCheckReadiness={handleCheckReadiness}
+        checkingReadiness={checkingReadiness}
       />
       <div className="flex-1 overflow-y-auto p-8 max-w-3xl">
         {generating ? (
@@ -477,7 +525,37 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
             <p className="text-sm text-muted-foreground">Generating report sections...</p>
           </div>
         ) : (
-          renderActiveDomain()
+          <>
+            {suggestions.length > 0 && (
+              <div className="space-y-2 mb-6">
+                {suggestions.map((suggestion, index) => (
+                  <Alert
+                    key={`${suggestion.domain}-${index}`}
+                    variant={suggestion.severity === 'warning' ? 'warning' : 'info'}
+                  >
+                    {suggestion.severity === 'warning' ? (
+                      <AlertTriangle className="size-4" />
+                    ) : (
+                      <Info className="size-4" />
+                    )}
+                    <AlertTitle className="flex items-center justify-between">
+                      <span>{suggestion.message}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => dismissSuggestion(index)}
+                        className="shrink-0 -mr-1 -mt-0.5"
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </AlertTitle>
+                    <AlertDescription>{suggestion.recommendation}</AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
+            {renderActiveDomain()}
+          </>
         )}
       </div>
     </div>

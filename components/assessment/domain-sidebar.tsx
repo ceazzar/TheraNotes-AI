@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { CompletenessBar } from './completeness-bar'
-import { FileText } from 'lucide-react'
+import { FileText, ShieldCheck } from 'lucide-react'
 
 export const DOMAINS = [
   { key: 'participant_details', label: 'Participant Details' },
@@ -26,6 +26,8 @@ interface DomainSidebarProps {
   domainStatus: Record<string, string>
   onGenerate: () => void
   canGenerate: boolean
+  onCheckReadiness?: () => void
+  checkingReadiness?: boolean
 }
 
 function getStatusDot(status: string | undefined) {
@@ -44,6 +46,8 @@ export function DomainSidebar({
   domainStatus,
   onGenerate,
   canGenerate,
+  onCheckReadiness,
+  checkingReadiness,
 }: DomainSidebarProps) {
   return (
     <div className="w-64 shrink-0 border-r bg-muted/30 flex flex-col h-full">
@@ -77,7 +81,22 @@ export function DomainSidebar({
 
       <Separator />
 
-      <div className="p-4">
+      <div className="p-4 space-y-2">
+        {onCheckReadiness && (
+          <Button
+            className="w-full"
+            variant="outline"
+            disabled={checkingReadiness}
+            onClick={onCheckReadiness}
+          >
+            {checkingReadiness ? (
+              <span className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" data-icon="inline-start" />
+            ) : (
+              <ShieldCheck className="size-4" data-icon="inline-start" />
+            )}
+            {checkingReadiness ? 'Checking...' : 'Check Readiness'}
+          </Button>
+        )}
         <Button
           className="w-full"
           disabled={!canGenerate}
