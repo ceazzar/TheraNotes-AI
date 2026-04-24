@@ -1,234 +1,199 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import {
-  ChevronLeft,
-  Search,
-  Shield,
-} from "lucide-react";
-import {
-  REPORT_SECTIONS,
-  FLAGS as INITIAL_FLAGS,
-  PARTICIPANT,
-} from "@/lib/workspace/sample-data";
-import type { Flag, FlagPreview } from "@/lib/workspace/sample-data";
-import { TocSidebar } from "./toc-sidebar";
-import { DocumentBody } from "./document-body";
-import { SelectionToolbar } from "./selection-toolbar";
-import { RefinePanel } from "./refine-panel";
-import { ReplacePopover } from "./replace-popover";
-import { FlagPopover } from "./flag-popover";
-import { MarginDots } from "./margin-dots";
-import { WorkspaceFooter } from "./workspace-footer";
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { ChevronLeft, Search, Shield } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { reportToPlate } from '@/lib/editor/report-to-plate'
+import { plateToSections } from '@/lib/editor/plate-to-sections'
+import { useAutoSave } from '@/hooks/use-auto-save'
+import { PlateDocEditor, type PlateEditorHandle } from './plate-editor'
+import { TocSidebar } from './toc-sidebar'
+import { WorkspaceFooter } from './workspace-footer'
+import type { ReportSection, Flag, Participant } from '@/lib/workspace/types'
+import type { Value } from 'platejs'
+
+type Sections = Record<string, { title: string; content: string }>
+
+interface Report {
+  id: string
+  sections: Sections
+  status: string
+  assessment_id: string | null
+  planner_review: { flags?: PlannerFlag[] } | null
+}
+
+interface PlannerFlag {
+  sectionId: string
+  severity: 'critical' | 'warning' | 'suggestion'
+  issue: string
+  recommendation: string
+  ndisRationale: string
+  originalText?: string
+  refined?: string
+}
 
 interface WorkspaceLayoutProps {
-  reportId: string;
+  reportId: string
 }
 
 export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
-  // Flag state
-  const [flags, setFlags] = useState<Flag[]>(() =>
-    INITIAL_FLAGS.map((f) => ({ ...f, resolved: false }))
-  );
-  // AI replacement preview state
-  const [previews, setPreviews] = useState<Record<string, FlagPreview>>({});
-  // Open popover
-  const [openFlag, setOpenFlag] = useState<{
-    id: string;
-    anchor: HTMLElement;
-  } | null>(null);
-  // Section visibility
-  const [activeSection, setActiveSection] = useState("a");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [report, setReport] = useState<Report | null>(null)
+  const [participant, setParticipant] = useState<Participant | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [plateValue, setPlateValue] = useState<Value | null>(null)
+  const [sectionKeys, setSectionKeys] = useState<string[]>([])
+  const [tocSections, setTocSections] = useState<ReportSection[]>([])
+  const [flags, setFlags] = useState<Flag[]>([])
 
-  // Selection toolbar
-  const [selection, setSelection] = useState<{
-    rect: DOMRect;
-    text: string;
-  } | null>(null);
-  const [refineOpen, setRefineOpen] = useState(false);
-  const [refineText, setRefineText] = useState("");
-  const [pendingSelReplace, setPendingSelReplace] = useState<{
-    original: string;
-    refined: string;
-    rect: DOMRect;
-  } | null>(null);
+  const [activeSection, setActiveSection] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  const paperRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<PlateEditorHandle>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const supabase = useMemo(() => createClient(), [])
 
-  // Track text selection on the paper
+  // Fetch report data
   useEffect(() => {
-    const onUp = () => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) {
-        setSelection(null);
-        setRefineOpen(false);
-        return;
+    async function load() {
+      const { data: reportData } = await supabase
+        .from('reports')
+        .select('id, sections, status, assessment_id, planner_review')
+        .eq('id', reportId)
+        .single()
+
+      if (!reportData) {
+        setLoading(false)
+        return
       }
-      const range = sel.getRangeAt(0);
-      if (!paperRef.current?.contains(range.commonAncestorContainer)) {
-        setSelection(null);
-        return;
+
+      const r: Report = {
+        id: reportData.id,
+        sections: (reportData.sections as Sections) ?? {},
+        status: reportData.status,
+        assessment_id: reportData.assessment_id,
+        planner_review: reportData.planner_review as Report['planner_review'],
       }
-      const rect = range.getBoundingClientRect();
-      if (rect.width < 2) return;
-      setSelection({ rect, text: sel.toString() });
-    };
-    document.addEventListener("mouseup", onUp);
-    return () => document.removeEventListener("mouseup", onUp);
-  }, []);
+      setReport(r)
 
-  // Active section detection on scroll
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const anchors = el.querySelectorAll("[data-section-anchor]");
-      let current = "a";
-      anchors.forEach((a) => {
-        const top = a.getBoundingClientRect().top;
-        if (top < 180) current = (a as HTMLElement).dataset.sectionAnchor || "a";
-      });
-      setActiveSection(current);
-    };
-    el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+      // Convert sections to Plate nodes
+      const { value, sectionKeys: keys } = reportToPlate(r.sections)
+      setPlateValue(value)
+      setSectionKeys(keys)
 
-  // Flag map for quick lookups
-  const flagMap = useMemo(() => {
-    const m: Record<string, Flag> = {};
-    flags.forEach((f) => {
-      m[f.id] = f;
-    });
-    return m;
-  }, [flags]);
+      // Build TOC sections
+      const toc: ReportSection[] = keys.map((key) => ({
+        id: key,
+        title: r.sections[key]?.title ?? key,
+      }))
+      setTocSections(toc)
 
-  // Progress: percentage of sections with resolved flags
+      // Convert planner flags
+      const plannerFlags = r.planner_review?.flags ?? []
+      const mappedFlags: Flag[] = plannerFlags.map((f, i) => ({
+        id: `flag-${i}`,
+        sev: f.severity,
+        section: f.sectionId,
+        title: f.issue,
+        desc: f.recommendation,
+        fix: f.recommendation,
+        rationale: f.ndisRationale,
+        refined: f.refined ?? '',
+        originalText: f.originalText ?? '',
+        resolved: false,
+      }))
+      setFlags(mappedFlags)
+
+      // Fetch participant info
+      if (reportData.assessment_id) {
+        const { data: assessment } = await supabase
+          .from('assessments')
+          .select('participant_name, ndis_number, assessor_name')
+          .eq('id', reportData.assessment_id)
+          .single()
+
+        if (assessment) {
+          setParticipant({
+            name: (assessment as Record<string, string>).participant_name ?? 'Participant',
+            ndisNumber: (assessment as Record<string, string>).ndis_number ?? '',
+            assessor: (assessment as Record<string, string>).assessor_name ?? '',
+            reportDate: new Date().toLocaleDateString('en-AU', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            }),
+          })
+        }
+      }
+
+      setLoading(false)
+    }
+    load()
+  }, [reportId, supabase])
+
+  // Auto-save
+  const saveToSupabase = useCallback(async () => {
+    const editor = editorRef.current?.editor
+    if (!editor || !report) return
+
+    const sections = plateToSections(editor.children, sectionKeys, editor)
+    await supabase
+      .from('reports')
+      .update({ sections })
+      .eq('id', report.id)
+  }, [report, sectionKeys, supabase])
+
+  const { markDirty, saveStatus } = useAutoSave({ save: saveToSupabase })
+
+  // Progress
   const touchedSections = useMemo(
     () => new Set(flags.filter((f) => f.resolved).map((f) => f.section)),
     [flags]
-  );
-  const progressPct = Math.round(
-    (touchedSections.size / REPORT_SECTIONS.length) * 100
-  );
-
-  const triggerSave = useCallback(() => {
-    setSaving(true);
-    setTimeout(() => setSaving(false), 900);
-  }, []);
+  )
+  const progressPct = tocSections.length
+    ? Math.round((touchedSections.size / tocSections.length) * 100)
+    : 0
 
   const jumpTo = useCallback((id: string) => {
-    const el = scrollRef.current?.querySelector(
-      `[data-section-anchor="${id}"]`
-    );
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  const openFlagById = useCallback((id: string, anchorEl?: HTMLElement) => {
-    let anchor = anchorEl;
-    if (!anchor) {
-      anchor = document.querySelector(
-        `[data-flag-id="${id}"]`
-      ) as HTMLElement | null ?? undefined;
+    const headings = scrollRef.current?.querySelectorAll('h2')
+    if (!headings) return
+    for (const h of headings) {
+      if (h.textContent?.includes(id) || h.textContent === id) {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        break
+      }
     }
-    if (!anchor) return;
-    anchor.scrollIntoView({ block: "center", behavior: "smooth" });
-    setTimeout(() => setOpenFlag({ id, anchor: anchor! }), 180);
-  }, []);
-
-  const applyFix = useCallback(
-    (flag: Flag) => {
-      setPreviews((p) => ({
-        ...p,
-        [flag.id]: {
-          state: "preview",
-          text: flag.refined,
-        },
-      }));
-      setOpenFlag(null);
-      triggerSave();
-    },
-    [triggerSave]
-  );
-
-  const dismissFlag = useCallback(
-    (flag: Flag) => {
-      setFlags((fs) =>
-        fs.map((f) => (f.id === flag.id ? { ...f, resolved: true } : f))
-      );
-      setOpenFlag(null);
-      triggerSave();
-    },
-    [triggerSave]
-  );
-
-  const handleAcceptPreview = useCallback(
-    (flagId: string) => {
-      setFlags((fs) =>
-        fs.map((f) => (f.id === flagId ? { ...f, resolved: true } : f))
-      );
-      setPreviews((p) => ({
-        ...p,
-        [flagId]: { state: "accepted", text: p[flagId]?.text || "" },
-      }));
-      triggerSave();
-    },
-    [triggerSave]
-  );
-
-  const handleRejectPreview = useCallback((flagId: string) => {
-    setPreviews((p) => {
-      const c = { ...p };
-      delete c[flagId];
-      return c;
-    });
-  }, []);
+  }, [])
 
   const reviewAll = useCallback(() => {
-    const first = flags.find((f) => !f.resolved);
-    if (first) openFlagById(first.id);
-  }, [flags, openFlagById]);
+    const first = flags.find((f) => !f.resolved)
+    if (first) jumpTo(first.section)
+  }, [flags, jumpTo])
 
-  // Selection -> Refine
-  const doRefineSubmit = useCallback(() => {
-    if (!selection) return;
-    const refined =
-      "functions independently with standard prompts and achieves the task consistently across observed trials";
-    setPendingSelReplace({
-      original: selection.text,
-      refined,
-      rect: selection.rect,
-    });
-    setSelection(null);
-    setRefineOpen(false);
-    setRefineText("");
-  }, [selection]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--tn-bg)' }}>
+        <p className="text-sm text-muted-foreground">Loading workspace...</p>
+      </div>
+    )
+  }
 
-  const onOpenFlagFromSpan = useCallback(
-    (id: string, el: HTMLElement) => {
-      setOpenFlag({ id, anchor: el });
-    },
-    []
-  );
-
-  const liveFlags = useMemo(
-    () => flags.filter((f) => !f.resolved),
-    [flags]
-  );
+  if (!report || !plateValue) {
+    return (
+      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--tn-bg)' }}>
+        <p className="text-sm text-muted-foreground">Report not found.</p>
+      </div>
+    )
+  }
 
   return (
     <div
       className="tn-ws"
       data-sidebar-collapsed={sidebarCollapsed}
-      data-flag-style="margin"
-      style={{ "--sidebar-w": "280px" } as React.CSSProperties}
+      style={{ '--sidebar-w': '280px' } as React.CSSProperties}
     >
       {/* Sidebar */}
       <TocSidebar
-        sections={REPORT_SECTIONS}
+        sections={tocSections}
         flags={flags}
         activeSection={activeSection}
         collapsed={sidebarCollapsed}
@@ -236,7 +201,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         progressPct={progressPct}
         onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
         onJumpTo={jumpTo}
-        onOpenFlag={openFlagById}
+        onOpenFlag={(id) => jumpTo(id)}
         onReviewAll={reviewAll}
       />
 
@@ -253,16 +218,17 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
               <ChevronLeft size={13} /> Back
             </button>
             <span>Reports</span>
-            <span style={{ color: "var(--tn-muted-3)" }}>/</span>
-            <b>FCA &mdash; {PARTICIPANT.name}</b>
+            <span style={{ color: 'var(--tn-muted-3)' }}>/</span>
+            <b>FCA &mdash; {participant?.name ?? 'Report'}</b>
             <span
               style={{
-                color: "var(--tn-muted-3)",
+                color: 'var(--tn-muted-3)',
                 marginLeft: 6,
                 fontSize: 12,
               }}
             >
-              Draft v1 &middot; {PARTICIPANT.reportDate}
+              {report.status === 'ready' ? 'Ready' : 'Draft'} &middot;{' '}
+              {participant?.reportDate ?? ''}
             </span>
           </div>
           <div className="tn-ws-top-actions">
@@ -277,67 +243,20 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
         {/* Paper scroll area */}
         <div className="tn-paper-scroll" ref={scrollRef}>
-          <div className="tn-paper" ref={paperRef}>
+          <div className="tn-paper">
             <div className="tn-paper-inner">
-              <DocumentBody
-                flags={flagMap}
-                previews={previews}
-                onOpenFlag={onOpenFlagFromSpan}
-                onAcceptPreview={handleAcceptPreview}
-                onRejectPreview={handleRejectPreview}
+              <PlateDocEditor
+                ref={editorRef}
+                initialValue={plateValue}
+                onChange={markDirty}
               />
             </div>
-
-            {/* Margin dots */}
-            <MarginDots
-              flags={liveFlags}
-              onOpenFlag={openFlagById}
-              paperRef={paperRef}
-            />
           </div>
         </div>
 
         {/* Footer */}
-        <WorkspaceFooter saving={saving} />
+        <WorkspaceFooter saving={saveStatus === 'saving'} />
       </div>
-
-      {/* Selection toolbar */}
-      {selection && !refineOpen && (
-        <SelectionToolbar
-          rect={selection.rect}
-          onRefine={() => setRefineOpen(true)}
-        />
-      )}
-      {refineOpen && selection && (
-        <RefinePanel
-          rect={selection.rect}
-          value={refineText}
-          onChange={setRefineText}
-          onSubmit={doRefineSubmit}
-          onClose={() => setRefineOpen(false)}
-        />
-      )}
-      {pendingSelReplace && (
-        <ReplacePopover
-          data={pendingSelReplace}
-          onAccept={() => {
-            setPendingSelReplace(null);
-            triggerSave();
-          }}
-          onReject={() => setPendingSelReplace(null)}
-        />
-      )}
-
-      {/* Flag popover */}
-      {openFlag && (
-        <FlagPopover
-          flag={flagMap[openFlag.id]}
-          anchor={openFlag.anchor}
-          onClose={() => setOpenFlag(null)}
-          onApply={applyFix}
-          onDismiss={dismissFlag}
-        />
-      )}
     </div>
-  );
+  )
 }

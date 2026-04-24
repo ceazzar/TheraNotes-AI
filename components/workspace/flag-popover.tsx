@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback } from "react";
 import { X, Sparkles } from "lucide-react";
-import type { Flag } from "@/lib/workspace/sample-data";
+import type { Flag } from "@/lib/workspace/types";
 
 interface FlagPopoverProps {
   flag: Flag | undefined;

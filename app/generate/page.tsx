@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Paperclip,
@@ -64,6 +65,17 @@ export default function GeneratePage() {
   const reportRef = useRef<HTMLDivElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
+
+  // Redirect to workspace after generation completes
+  useEffect(() => {
+    if (isDone && reportId) {
+      const timer = setTimeout(() => {
+        router.push(`/workspace/${reportId}`)
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [isDone, reportId, router])
 
   const placeholder = `Paste or dictate your clinical notes. Cover: diagnoses · ADLs · mobility & transfers · mental health · sensory & cognition · standardised scores (WHODAS, FIM) · current supports · participant goals.`
 

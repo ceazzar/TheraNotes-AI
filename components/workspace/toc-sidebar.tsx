@@ -2,7 +2,7 @@
 
 import { Sparkles, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Flag, ReportSection } from "@/lib/workspace/sample-data";
+import type { Flag, ReportSection } from "@/lib/workspace/types";
 
 interface TocSidebarProps {
   sections: ReportSection[];

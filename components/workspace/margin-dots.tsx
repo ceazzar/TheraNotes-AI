@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useState, type RefObject } from "react";
-import type { Flag } from "@/lib/workspace/sample-data";
+import type { Flag } from "@/lib/workspace/types";
 
 interface MarginDotsProps {
   flags: Flag[];
