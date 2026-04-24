@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { generateSection, runCoherenceCheck } from '@/lib/ai/generate'
+import { generateSection, runCoherenceCheck, type Assessment } from '@/lib/ai/generate'
 
 export const maxDuration = 300
 
@@ -26,12 +26,30 @@ export async function POST(request: NextRequest) {
   }
 
   // Per-section generation
-  const { sessionId, reportId, sectionId, clinicalNotes, questionnaireData } = body
+  // Accepts either:
+  //   - assessmentId (hybrid path) — loads structured assessment, extracts domain data per section
+  //   - sessionId + clinicalNotes (legacy path) — passes raw notes directly
+  const { assessmentId, sessionId, reportId, sectionId, clinicalNotes, questionnaireData } = body
   let currentReportId = reportId
 
+  // Load assessment if assessmentId is provided (hybrid path)
+  let assessment: Assessment | undefined
+  if (assessmentId) {
+    const { data: assessmentRow, error: assessmentError } = await supabase
+      .from('assessments').select('*').eq('id', assessmentId).single()
+    if (assessmentError || !assessmentRow) {
+      return NextResponse.json({ error: 'Assessment not found' }, { status: 404 })
+    }
+    assessment = assessmentRow as Assessment
+  }
+
   if (!currentReportId) {
+    // Hybrid path: link report to assessment; legacy path: link to session
+    const insertPayload = assessment
+      ? { assessment_id: assessmentId, user_id: user.id, status: 'generating' }
+      : { session_id: sessionId, user_id: user.id, status: 'generating' }
     const { data: newReport } = await supabase
-      .from('reports').insert({ session_id: sessionId, user_id: user.id, status: 'generating' })
+      .from('reports').insert(insertPayload)
       .select('id').single()
     currentReportId = newReport!.id
   }
@@ -42,7 +60,11 @@ export async function POST(request: NextRequest) {
   for (const [key, val] of Object.entries(existingSections)) previousSections[key] = val.content
 
   const result = await generateSection({
-    sectionId, clinicalNotes, userId: user.id, previousSections, questionnaireData,
+    sectionId,
+    ...(assessment ? { assessment } : { clinicalNotes }),
+    userId: user.id,
+    previousSections,
+    questionnaireData,
   })
 
   const updatedSections = {

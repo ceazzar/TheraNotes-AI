@@ -5,7 +5,10 @@ import {
   buildSummaryGenerationPrompt,
   buildCoherencePrompt,
 } from '@/lib/ai/prompts'
+import { getDomainDataForSection, type Assessment } from '@/lib/ai/domain-mapper'
 import template from '@/lib/template.json'
+
+export type { Assessment } from '@/lib/ai/domain-mapper'
 
 let _openai: OpenAI | null = null
 function getOpenAI() {
@@ -25,7 +28,10 @@ interface SectionTemplate {
 
 export interface GenerateSectionParams {
   sectionId: string
-  clinicalNotes: string
+  /** @deprecated Use `assessment` instead for structured domain data. */
+  clinicalNotes?: string
+  /** Structured assessment object — when provided, domain data is extracted automatically. */
+  assessment?: Assessment
   userId: string
   previousSections: Record<string, string>
   questionnaireData?: string
@@ -41,14 +47,19 @@ export interface GenerateSectionResult {
 export async function generateSection(
   params: GenerateSectionParams
 ): Promise<GenerateSectionResult> {
-  const { sectionId, clinicalNotes, userId, previousSections, questionnaireData } = params
+  const { sectionId, clinicalNotes: rawNotes, assessment, userId, previousSections, questionnaireData } = params
 
+  // Resolve clinical notes: prefer structured assessment domain data, fall back to raw notes
   const sectionTemplate = (template.sections as SectionTemplate[]).find(
     s => s.name === sectionId || s.order.toString() === sectionId
   )
   if (!sectionTemplate) {
     throw new Error(`Section "${sectionId}" not found in template`)
   }
+
+  const clinicalNotes = assessment
+    ? getDomainDataForSection(sectionTemplate.name, assessment)
+    : (rawNotes ?? '')
 
   const ragResults = await queryRag({
     queryText: `${sectionTemplate.name}: ${clinicalNotes.slice(0, 500)}`,
