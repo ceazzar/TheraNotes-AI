@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useMemo } from 'react'
@@ -32,7 +32,9 @@ export function RevisionChat({
     [reportId, activeSectionId]
   )
 
-  const { messages, input, setInput, sendMessage, status } = useChat({
+  const [input, setInput] = useState('')
+
+  const { messages, sendMessage, status } = useChat({
     transport,
   })
 
