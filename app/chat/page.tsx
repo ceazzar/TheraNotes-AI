@@ -265,29 +265,32 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Mobile sidebar overlay */}
+      {/* Sidebar backdrop (mobile only) */}
       {showMobileSidebar && (
-        <div className="absolute inset-0 z-50 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setShowMobileSidebar(false)}
-          />
-          <div className="relative z-10 h-full w-[268px]">
-            <SessionSidebar
-              currentSessionId={sessionId}
-              onSelectSession={loadSession}
-              onNewSession={createSession}
-            />
-          </div>
-        </div>
+        <div
+          className="absolute inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setShowMobileSidebar(false)}
+        />
       )}
 
-      {/* Desktop sidebar */}
-      <div className="hidden md:block">
+      {/* Single sidebar — hidden on mobile unless showMobileSidebar */}
+      <div
+        className={`${
+          showMobileSidebar
+            ? 'absolute inset-y-0 left-0 z-50'
+            : 'hidden'
+        } md:relative md:block md:z-auto`}
+      >
         <SessionSidebar
           currentSessionId={sessionId}
-          onSelectSession={loadSession}
-          onNewSession={createSession}
+          onSelectSession={(id) => {
+            loadSession(id)
+            setShowMobileSidebar(false)
+          }}
+          onNewSession={() => {
+            createSession()
+            setShowMobileSidebar(false)
+          }}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
