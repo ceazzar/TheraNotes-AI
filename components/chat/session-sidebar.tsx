@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useId } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
@@ -34,6 +34,7 @@ export function SessionSidebar({
 }: SessionSidebarProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const supabase = useMemo(() => createClient(), [])
+  const instanceId = useId()
 
   useEffect(() => {
     async function loadSessions() {
@@ -48,7 +49,7 @@ export function SessionSidebar({
     loadSessions()
 
     const channel = supabase
-      .channel('sessions-changes')
+      .channel(`sessions-${instanceId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sessions' },
