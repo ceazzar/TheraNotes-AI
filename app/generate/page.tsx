@@ -3,14 +3,19 @@
 import { useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { FileText, ArrowUp, Sparkles, ClipboardPaste } from 'lucide-react'
+import {
+  Paperclip,
+  Mic,
+  FileText,
+  ArrowUp,
+  Sparkles,
+  X,
+  AlertTriangle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
-import { TextDotsLoader } from '@/components/ui/loader'
+import { Input } from '@/components/ui/input'
+import { Topbar } from '@/components/layout/topbar'
+import { ProgressScreen } from '@/components/generate/progress-screen'
 import { FormattedReport } from '@/components/report/formatted-report'
 import { ExportButton } from '@/components/report/export-button'
 import templateData from '@/lib/template.json'
@@ -24,11 +29,30 @@ type SectionTemplate = {
 type Sections = Record<string, { title: string; content: string }>
 
 const generatableSections = (templateData.sections as SectionTemplate[])
-  .filter(s => !s.auto_generate)
+  .filter((s) => !s.auto_generate)
   .sort((a, b) => a.order - b.order)
 
+// Map template sections to progress display items
+const progressSections = generatableSections.map((s, i) => ({
+  id: s.name,
+  title: s.name,
+  duration: 3000 + i * 500,
+}))
+
 export default function GeneratePage() {
+  // Identity fields
+  const [participantName, setParticipantName] = useState('')
+  const [ndisNumber, setNdisNumber] = useState('')
+  const [assessor, setAssessor] = useState('')
+
+  // Notes
   const [clinicalNotes, setClinicalNotes] = useState('')
+
+  // UI state
+  const [showBanner, setShowBanner] = useState(true)
+  const [showValidation, setShowValidation] = useState(false)
+
+  // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentSectionName, setCurrentSectionName] = useState('')
   const [completedCount, setCompletedCount] = useState(0)
@@ -42,26 +66,22 @@ export default function GeneratePage() {
   const topRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClient(), [])
 
-  const totalSections = generatableSections.length
-  const progressPercent = isCoherenceRunning
-    ? 95
-    : totalSections > 0
-      ? Math.round((completedCount / totalSections) * 90)
-      : 0
+  const placeholder = `Paste or dictate your clinical notes. Cover: diagnoses · ADLs · mobility & transfers · mental health · sensory & cognition · standardised scores (WHODAS, FIM) · current supports · participant goals.`
 
-  const handleGenerate = useCallback(async () => {
-    if (!clinicalNotes.trim()) return
-
+  /** Core generation logic, shared by both paths */
+  const runGeneration = useCallback(async () => {
     setIsGenerating(true)
     setError(null)
     setSections({})
     setCompletedCount(0)
     setReportId(null)
     setIsDone(false)
+    setShowValidation(false)
 
     try {
-      // Create a temporary assessment row with clinical_notes and empty domains
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (!user) {
         setError('You must be logged in to generate reports.')
         setIsGenerating(false)
@@ -72,7 +92,7 @@ export default function GeneratePage() {
         .from('assessments')
         .insert({
           user_id: user.id,
-          participant_name: 'Quick Generate',
+          participant_name: participantName || 'Quick Generate',
           clinical_notes: clinicalNotes,
           domains: {},
           status: 'quick_generate',
@@ -89,7 +109,6 @@ export default function GeneratePage() {
       let currentReportId: string | null = null
       const accumulatedSections: Sections = {}
 
-      // Generate each section sequentially
       for (let i = 0; i < generatableSections.length; i++) {
         const section = generatableSections[i]
         setCurrentSectionName(section.name)
@@ -107,7 +126,9 @@ export default function GeneratePage() {
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}))
-          throw new Error(errData.error || `Failed to generate "${section.name}"`)
+          throw new Error(
+            errData.error || `Failed to generate "${section.name}"`
+          )
         }
 
         const data = await response.json()
@@ -121,9 +142,11 @@ export default function GeneratePage() {
         setSections({ ...accumulatedSections })
         setCompletedCount(i + 1)
 
-        // Scroll to report area after first section
         if (i === 0 && reportRef.current) {
-          reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          reportRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          })
         }
       }
 
@@ -145,13 +168,30 @@ export default function GeneratePage() {
 
       setIsDone(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred.'
+      )
     } finally {
       setIsGenerating(false)
       setIsCoherenceRunning(false)
       setCurrentSectionName('')
     }
-  }, [clinicalNotes, supabase])
+  }, [clinicalNotes, supabase, participantName])
+
+  /** Send button click: show validation first, then generate */
+  const handleGenerate = useCallback(() => {
+    if (!clinicalNotes.trim()) return
+    if (!showValidation) {
+      setShowValidation(true)
+      return
+    }
+    runGeneration()
+  }, [clinicalNotes, showValidation, runGeneration])
+
+  /** "Generate anyway" bypasses validation */
+  const handleGenerateAnyway = useCallback(() => {
+    runGeneration()
+  }, [runGeneration])
 
   const scrollToTop = useCallback(() => {
     topRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -159,161 +199,298 @@ export default function GeneratePage() {
 
   const hasSections = Object.keys(sections).length > 0
 
-  return (
-    <div className="min-h-screen bg-muted/30">
-      <div ref={topRef} />
+  // --- Progress screen ---
+  if (isGenerating) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Topbar />
+        <ProgressScreen
+          sections={progressSections}
+          activeIndex={completedCount}
+        />
+      </div>
+    )
+  }
 
-      {/* Top Section: Input */}
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex items-center gap-2">
-            <FileText className="size-7 text-primary" />
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              TheraNotes AI
-            </h1>
+  // --- Report results screen ---
+  if (hasSections) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--tn-bg)' }}>
+        <Topbar />
+        <div ref={topRef} />
+
+        {isDone && (
+          <div className="mx-auto mb-6 mt-6 max-w-[800px] px-4">
+            <div
+              className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
+              style={{
+                background: 'var(--tn-ok-bg)',
+                border: '1px solid var(--tn-ok-line)',
+                color: 'var(--tn-ok)',
+              }}
+            >
+              <Sparkles className="size-4" />
+              Report generated successfully. Review the document below and
+              download when ready.
+            </div>
           </div>
-          <p className="text-muted-foreground">
-            Paste your clinical notes. Get an NDIS-ready FCA report.
-          </p>
+        )}
+
+        <div ref={reportRef} className="px-4 pb-24">
+          <FormattedReport sections={sections} />
         </div>
 
-        {/* Input Card */}
-        <Card>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="clinical-notes">
-                <ClipboardPaste className="size-4 text-muted-foreground" />
-                Clinical Notes
-              </Label>
-              <Textarea
-                id="clinical-notes"
-                placeholder="Paste your clinical notes here... Include participant background, diagnoses, functional observations, assessment results, and any relevant history."
-                className="min-h-[200px] resize-y text-sm leading-relaxed"
-                value={clinicalNotes}
-                onChange={(e) => setClinicalNotes(e.target.value)}
-                disabled={isGenerating}
-              />
+        {isDone && (
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50"
+            style={{
+              background: 'var(--tn-bg)',
+              borderTop: '1px solid var(--tn-line-soft)',
+              backdropFilter: 'blur(6px)',
+            }}
+          >
+            <div className="mx-auto flex max-w-[800px] items-center justify-between px-6 py-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={scrollToTop}
+              >
+                <ArrowUp className="size-3.5" />
+                Back to top
+              </Button>
+              <div className="flex items-center gap-3">
+                {reportId && (
+                  <Link
+                    href={`/report/${reportId}`}
+                    className="text-sm transition-colors"
+                    style={{ color: 'var(--tn-muted-1)' }}
+                  >
+                    Open in report viewer
+                  </Link>
+                )}
+                <ExportButton sections={sections} />
+              </div>
             </div>
-
-            <Button
-              className="w-full h-10 gap-2 text-sm font-semibold"
-              onClick={handleGenerate}
-              disabled={isGenerating || !clinicalNotes.trim()}
-            >
-              {isGenerating ? (
-                <>
-                  <TextDotsLoader text="Generating" size="sm" className="text-primary-foreground" />
-                </>
-              ) : (
-                <>
-                  <Sparkles className="size-4" />
-                  Generate Report
-                </>
-              )}
-            </Button>
-
-            {/* Error display */}
-            {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Progress indicator */}
-        {isGenerating && (
-          <Card className="mt-4">
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-foreground">
-                    {isCoherenceRunning ? 'Coherence check' : currentSectionName}
-                  </span>
-                  <Badge variant="secondary">
-                    {completedCount}/{totalSections}
-                  </Badge>
-                </div>
-                <Progress value={progressPercent} />
-                <div className="flex flex-wrap gap-1.5">
-                  {generatableSections.map((s, i) => (
-                    <Badge
-                      key={s.name}
-                      variant={
-                        i < completedCount
-                          ? 'default'
-                          : i === completedCount
-                            ? 'outline'
-                            : 'secondary'
-                      }
-                      className={
-                        i === completedCount
-                          ? 'animate-pulse border-primary/50'
-                          : ''
-                      }
-                    >
-                      {s.name.length > 25 ? s.name.slice(0, 22) + '...' : s.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          </div>
         )}
       </div>
+    )
+  }
 
-      {/* Bottom Section: Formatted Report */}
-      {hasSections && (
-        <div ref={reportRef} className="pb-24">
-          {/* Completion banner */}
-          {isDone && (
-            <div className="mx-auto mb-6 max-w-[800px] px-4">
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-                <Sparkles className="size-4" />
-                Report generated successfully. Review the document below and download when ready.
-              </div>
-            </div>
-          )}
+  // --- Generate input screen (default) ---
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Topbar />
 
-          {/* The formatted report */}
-          <div className="px-4">
-            <FormattedReport sections={sections} />
+      <div className="tn-gen-screen">
+        {/* First-run banner */}
+        {showBanner && (
+          <div className="tn-banner tn-fade-up">
+            <span className="tn-banner-dot" />
+            <span>
+              <strong>Tip</strong>&nbsp;&nbsp;Upload your previous FCA reports in
+              Settings to personalise the AI&rsquo;s writing style.
+            </span>
+            <button
+              className="tn-banner-close"
+              onClick={() => setShowBanner(false)}
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Title */}
+        <h1 className="tn-gen-title">
+          Draft a Functional Capacity Assessment
+        </h1>
+        <p className="tn-gen-sub">
+          Fill in the participant and paste your clinical notes &mdash;
+          we&rsquo;ll draft Parts A through E.
+        </p>
+
+        {/* Main input card */}
+        <div className="tn-gen-card">
+          {/* Identity row */}
+          <div className="tn-identity-row">
+            <label className="tn-id-field">
+              <span className="tn-id-label">Participant name</span>
+              <Input
+                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+                value={participantName}
+                onChange={(e) => setParticipantName(e.target.value)}
+                placeholder="e.g. Participant A"
+              />
+            </label>
+            <label className="tn-id-field">
+              <span className="tn-id-label">NDIS number</span>
+              <Input
+                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+                value={ndisNumber}
+                onChange={(e) => setNdisNumber(e.target.value)}
+                placeholder="430 xxx xxx"
+              />
+            </label>
+            <label className="tn-id-field">
+              <span className="tn-id-label">Assessor</span>
+              <Input
+                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+                value={assessor}
+                onChange={(e) => setAssessor(e.target.value)}
+                placeholder="Name, credentials"
+              />
+            </label>
           </div>
 
-          {/* Sticky footer bar */}
-          {isDone && (
-            <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-              <div className="mx-auto flex max-w-[800px] items-center justify-between px-6 py-3">
-                <Button variant="ghost" size="sm" className="gap-1.5" onClick={scrollToTop}>
-                  <ArrowUp className="size-3.5" />
-                  Back to top
-                </Button>
-                <div className="flex items-center gap-3">
-                  {reportId && (
-                    <Link
-                      href={`/report/${reportId}`}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Open in report viewer
-                    </Link>
-                  )}
-                  <ExportButton sections={sections} />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          {/* Textarea */}
+          <textarea
+            className="tn-notes-area"
+            placeholder={placeholder}
+            value={clinicalNotes}
+            onChange={(e) => setClinicalNotes(e.target.value)}
+          />
 
-      {/* Link to structured assessment form */}
-      <div className="mx-auto max-w-3xl px-4 pb-32 pt-8 text-center">
-        <Link
-          href="/assessments"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
-        >
-          Need more control? Use the structured assessment form &rarr;
-        </Link>
+          {/* Footer bar */}
+          <div className="tn-gen-footer">
+            <div className="tn-gen-tools">
+              <button
+                className="tn-tool-chip"
+                title="Attach transcripts or prior reports"
+              >
+                <Paperclip size={14} /> Attach
+              </button>
+              <button className="tn-tool-chip" title="Dictate">
+                <Mic size={14} /> Dictate
+              </button>
+              <button className="tn-tool-chip" title="Use a template">
+                <FileText size={14} /> Template
+              </button>
+            </div>
+            <button
+              className="tn-send-btn"
+              onClick={handleGenerate}
+              disabled={!clinicalNotes.trim()}
+              aria-label="Generate report"
+            >
+              <ArrowUp size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Quick-add chips (hidden when validation shows) */}
+        {!showValidation && (
+          <div className="tn-gen-helpers">
+            <button
+              className="tn-chip"
+              onClick={() =>
+                setClinicalNotes(
+                  (n) =>
+                    n +
+                    '\n\nAdditional: sensory -- hypersensitive to noise in community settings.'
+                )
+              }
+            >
+              + Sensory
+            </button>
+            <button
+              className="tn-chip"
+              onClick={() =>
+                setClinicalNotes(
+                  (n) =>
+                    n +
+                    '\n\nStandardised scores: WHODAS 2.0 total 62, Domain 5 (Participation) 68; FIM Self-Care 3.'
+                )
+              }
+            >
+              + Scores
+            </button>
+            <button
+              className="tn-chip"
+              onClick={() =>
+                setClinicalNotes(
+                  (n) =>
+                    n +
+                    '\n\nMental health: chronic anxiety and low mood most days; fortnightly psych; triggers unstructured time.'
+                )
+              }
+            >
+              + Mental health
+            </button>
+            <button
+              className="tn-chip"
+              onClick={() =>
+                setClinicalNotes(
+                  (n) =>
+                    n +
+                    '\n\nGoals: 1) increase community access 2) return to part-time work 3) maintain tenancy.'
+                )
+              }
+            >
+              + Goals
+            </button>
+          </div>
+        )}
+
+        {/* Validation warning */}
+        {showValidation && (
+          <div className="tn-valid tn-fade-up">
+            <div className="tn-valid-head">
+              <AlertTriangle size={16} />
+              Some domains look thin &mdash; the draft may contain
+              &ldquo;insufficient data&rdquo; markers.
+            </div>
+            <ul className="tn-valid-list">
+              <li>
+                <b>Mental Health</b> &mdash; try adding triggers, coping
+                strategies, treating clinician.
+              </li>
+              <li>
+                <b>Standardised Scores</b> &mdash; include WHODAS domains and
+                any FIM / sensory scores.
+              </li>
+              <li>
+                <b>Sensory profile</b> &mdash; describe any hyper- or
+                hypo-responsiveness.
+              </li>
+            </ul>
+            <div className="tn-valid-actions">
+              <button
+                className="tn-btn tn-btn-outline tn-btn-sm"
+                onClick={() => setShowValidation(false)}
+              >
+                Add more notes
+              </button>
+              <button
+                className="tn-btn tn-btn-primary tn-btn-sm"
+                onClick={handleGenerateAnyway}
+              >
+                Generate anyway
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error display */}
+        {error && (
+          <div
+            className="mt-4 w-full max-w-[720px] rounded-lg px-4 py-3 text-sm"
+            style={{
+              background: 'var(--tn-crit-bg)',
+              border: '1px solid var(--tn-crit-line)',
+              color: 'var(--tn-crit)',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Footnote */}
+        <div className="tn-gen-footnote">
+          TheraNotes drafts clinical-grade reports &mdash; every line remains
+          yours to edit and verify. Data stays in Australia.
+        </div>
       </div>
     </div>
   )
