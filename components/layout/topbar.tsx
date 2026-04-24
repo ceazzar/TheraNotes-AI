@@ -3,8 +3,6 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 const navItems = [
   { label: 'Generate', href: '/generate' },
@@ -47,17 +45,7 @@ export function Topbar() {
 
       {/* Right side */}
       <div className="tn-nav-right">
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            'rounded-full border-[var(--tn-line)] bg-[var(--tn-bg-raised)]',
-            'text-[var(--tn-ink)] text-[13px] font-medium',
-            'hover:border-[var(--tn-muted-3)]'
-          )}
-        >
-          Upgrade
-        </Button>
+        <button className="tn-btn tn-btn-outline tn-btn-sm">Upgrade</button>
         <div className="tn-avatar" aria-label="User avatar" />
       </div>
     </header>

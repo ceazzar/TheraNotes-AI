@@ -13,7 +13,6 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Topbar } from '@/components/layout/topbar'
 import { ProgressScreen } from '@/components/generate/progress-screen'
 import { FormattedReport } from '@/components/report/formatted-report'
@@ -317,8 +316,8 @@ export default function GeneratePage() {
           <div className="tn-identity-row">
             <label className="tn-id-field">
               <span className="tn-id-label">Participant name</span>
-              <Input
-                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+              <input
+                className="tn-id-input"
                 value={participantName}
                 onChange={(e) => setParticipantName(e.target.value)}
                 placeholder="e.g. Participant A"
@@ -326,8 +325,8 @@ export default function GeneratePage() {
             </label>
             <label className="tn-id-field">
               <span className="tn-id-label">NDIS number</span>
-              <Input
-                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+              <input
+                className="tn-id-input"
                 value={ndisNumber}
                 onChange={(e) => setNdisNumber(e.target.value)}
                 placeholder="430 xxx xxx"
@@ -335,8 +334,8 @@ export default function GeneratePage() {
             </label>
             <label className="tn-id-field">
               <span className="tn-id-label">Assessor</span>
-              <Input
-                className="tn-id-input !border-none !ring-0 !shadow-none !outline-none !p-0 !h-auto !rounded-none !bg-transparent"
+              <input
+                className="tn-id-input"
                 value={assessor}
                 onChange={(e) => setAssessor(e.target.value)}
                 placeholder="Name, credentials"

@@ -2,8 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Google Fonts for Geist (fallback if next/font fails) and Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Google Fonts for Geist (fallback if next/font fails), Inter, and Urbanist */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Urbanist:wght@500;600;700&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
@@ -65,7 +65,7 @@
    Shadcn CSS Variables (light)
    ========================================================================== */
 :root {
-  --background: oklch(0.965 0.003 90);
+  --background: #F6F5F2;
   --foreground: oklch(0.145 0.02 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0.02 260);
@@ -170,7 +170,7 @@
   /* Font stacks */
   --font-sans:    'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono:    'Geist Mono', ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
-  --font-display: 'Geist', 'Inter', system-ui, sans-serif;
+  --font-display: 'Urbanist', 'Geist', sans-serif;
 }
 
 @layer base {
@@ -361,7 +361,6 @@
   flex-direction: column;
   align-items: center;
   padding: 64px 28px 32px;
-  background: var(--tn-bg);
   min-height: calc(100vh - 56px);
 }
 .tn-banner {
@@ -604,7 +603,6 @@
   flex-direction: column;
   align-items: center;
   padding: 80px 28px;
-  background: var(--tn-bg);
   min-height: calc(100vh - 56px);
 }
 .tn-progress-card {
