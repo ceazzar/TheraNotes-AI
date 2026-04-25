@@ -12,7 +12,10 @@ export function useAutoSave({ save, debounceMs = 1500 }: UseAutoSaveOptions) {
   const dirtyRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const saveRef = useRef(save)
-  saveRef.current = save
+
+  useEffect(() => {
+    saveRef.current = save
+  }, [save])
 
   const flush = useCallback(async () => {
     if (!dirtyRef.current) return

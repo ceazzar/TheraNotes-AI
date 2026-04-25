@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, FileText } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ReportSection } from './report-section'
 import { PlannerFlags } from './planner-flags'
@@ -48,39 +48,49 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
-  const fetchReport = useCallback(async () => {
+  const fetchReport = useCallback(async (): Promise<Report | null> => {
     const { data } = await supabase
       .from('reports')
       .select('id, sections, status, assessment_id, insufficient_data_flags, planner_review')
       .eq('id', reportId)
       .single()
 
-    if (data) {
-      const sections = (data.sections as Sections) || {}
-      const flags = (data.insufficient_data_flags as string[]) || []
+    if (!data) return null
 
-      // Mark sections with insufficient data
-      for (const flag of flags) {
-        if (sections[flag]) {
-          sections[flag].insufficientData = true
-        }
+    const sections = { ...((data.sections as Sections) || {}) }
+    const flags = (data.insufficient_data_flags as string[]) || []
+
+    // Mark sections with insufficient data
+    for (const flag of flags) {
+      if (sections[flag]) {
+        sections[flag] = { ...sections[flag], insufficientData: true }
       }
+    }
 
-      setReport({
-        id: data.id,
-        sections,
-        status: data.status,
-        assessment_id: data.assessment_id,
-        insufficient_data_flags: data.insufficient_data_flags,
-        planner_review: (data.planner_review as PlannerReview) ?? null,
-      })
+    return {
+      id: data.id,
+      sections,
+      status: data.status,
+      assessment_id: data.assessment_id,
+      insufficient_data_flags: data.insufficient_data_flags,
+      planner_review: (data.planner_review as PlannerReview) ?? null,
     }
   }, [reportId, supabase])
 
   useEffect(() => {
-    fetchReport()
-    const interval = setInterval(fetchReport, 3000)
-    return () => clearInterval(interval)
+    let isActive = true
+    const refresh = () => {
+      void fetchReport().then((nextReport) => {
+        if (isActive && nextReport) setReport(nextReport)
+      })
+    }
+
+    refresh()
+    const interval = setInterval(refresh, 3000)
+    return () => {
+      isActive = false
+      clearInterval(interval)
+    }
   }, [fetchReport])
 
   const handleRevise = useCallback((sectionId: string) => {

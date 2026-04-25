@@ -25,7 +25,6 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 }
 
 interface ReportCardProps {
-  id: string
   status: string
   participantName: string | null
   sectionCount: number
@@ -44,7 +43,6 @@ function formatDate(dateStr: string): string {
 }
 
 export function ReportCard({
-  id,
   status,
   participantName,
   sectionCount,

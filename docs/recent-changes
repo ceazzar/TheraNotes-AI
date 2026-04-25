@@ -1,0 +1,950 @@
+# Recent Changes — Codex Session Record
+
+**Date:** 2026-04-26  
+**Repo:** `/Users/ceazar/code-base/TheraNotes-AI`  
+**Branch:** `main` at the time of work  
+**Primary goal:** Pull the latest repository state, run an extensive end-to-end code review and browser test pass, then fix all identified findings.
+
+---
+
+## 1. Session Scope
+
+This session covered four large pieces of work:
+
+1. Pull the latest repository state.
+2. Perform an end-to-end code review and browser-based smoke test with the supplied test account.
+3. Document concrete findings from that review.
+4. Implement fixes for all findings and re-test the critical flows.
+
+The test account used during browser verification was:
+
+- Username: `test@user.com`
+- Password: `test123`
+
+Sensitive environment values were not documented here. The browser and server logs exposed that the current model provider key is invalid, but the full key value is intentionally omitted.
+
+---
+
+## 2. Repository Preparation
+
+### Pull Latest
+
+The repo was updated from the remote before review/fix work started.
+
+There were local changes present before pulling, so a defensive stash was created:
+
+- `stash@{Sat Apr 25 20:29:27 2026}: On main: codex-pre-pull-2026-04-25`
+
+The pull completed and the working copy was then used for the review and fixes.
+
+### Environment And Dependency Setup
+
+The app depends on local environment variables and a synced lockfile.
+
+During setup:
+
+- `.env.local` was pulled from Vercel preview configuration.
+- `.env.local` remained ignored and was not printed.
+- `.gitignore` was updated to include `.env*.local`.
+- `npm install` updated `package-lock.json` so it matched the already-declared dependencies in `package.json`.
+
+These two files were already changed before the main finding fixes:
+
+- `.gitignore`
+- `package-lock.json`
+
+---
+
+## 3. Framework Instructions Followed
+
+The repo contains an `AGENTS.md` instruction:
+
+> This is NOT the Next.js you know. This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
+Before changing Next.js-specific code, the relevant local Next.js 16 docs were checked under:
+
+- `node_modules/next/dist/docs/01-app/03-api-reference/08-turbopack.md`
+- `node_modules/next/dist/docs/01-app/02-guides/upgrading/codemods.md`
+
+Relevant conclusions:
+
+- Turbopack is the default in Next 16.
+- `middleware.ts` is deprecated in favor of `proxy.ts`.
+- The middleware-to-proxy migration requires renaming the file and exported function.
+
+That directly informed the `middleware.ts` to `proxy.ts` change.
+
+---
+
+## 4. Initial E2E Review Pass
+
+A local dev server was started and the app was exercised in the browser.
+
+Observed baseline behavior:
+
+- Login with `test@user.com` / `test123` succeeded.
+- `/generate` loaded and accepted participant/NDIS/assessor/clinical-notes input.
+- Clicking Generate, then Generate anyway, failed immediately with:
+  - `Failed to create assessment. Please try again.`
+- Existing report route loaded:
+  - `/report/a0481931-2b55-4bcb-b632-da0ffe2d3237`
+- The report viewer showed generated report sections, but status was still stale as `Generating...`.
+- DOCX export from the report viewer worked and produced a local `FCA-Report.docx`.
+- The workspace route was mostly blank despite the report viewer having section content:
+  - `/workspace/a0481931-2b55-4bcb-b632-da0ffe2d3237`
+- The workspace showed `0%` progress.
+- The NDIS review button rendered but did nothing.
+- `/settings` loaded.
+- Exemplar upload was not performed because uploading a local file to cloud storage is an outbound file transfer and would require explicit action-time approval.
+
+The first E2E pass established that the main product path was blocked before any model generation could complete.
+
+---
+
+## 5. Review Findings
+
+The review produced ten actionable findings.
+
+### Finding 1 — P0
+
+**File:** `app/generate/page.tsx`  
+**Issue:** Generate inserted an invalid assessment row.
+
+The quick-generate path attempted to insert:
+
+- `domains`, which does not exist on the `assessments` table.
+- `status: "quick_generate"`, which is not allowed by the table constraint.
+
+The valid assessment status values are:
+
+- `draft`
+- `ready`
+- `generating`
+- `complete`
+
+The same path also failed to persist participant details such as:
+
+- NDIS number
+- Assessor
+- Clinical notes
+
+This was the immediate cause of the browser failure after clicking Generate anyway.
+
+### Finding 2 — P0
+
+**File:** `app/api/generate/route.ts`  
+**Issue:** The first report insert could not satisfy the database schema.
+
+When `/api/generate` was called in the assessment-based path, it attempted to insert a `reports` row without `session_id`.
+
+The initial migration requires:
+
+- `reports.session_id NOT NULL`
+
+The code also ignored the insert error and later assumed `newReport!.id` existed, which could either throw or silently fail to create usable state.
+
+### Finding 3 — P1
+
+**File:** `components/report/revision-chat.tsx`  
+**Issue:** Revision chat sent the wrong identifier.
+
+The frontend posted:
+
+- `reportId`
+- `activeSectionId`
+
+But `/api/chat` expected:
+
+- `sessionId`
+
+The API looked up reports by `session_id`, so report pages that only had `reportId` could not bind chat to the current report or section.
+
+### Finding 4 — P1
+
+**File:** `components/workspace/plate-editor.tsx`  
+**Issue:** Workspace editor was not rendering Plate content.
+
+The workspace converted content into a Plate value and passed it into `usePlateEditor`, but rendered a plain `contentEditable` div.
+
+Because the raw div was not bound to Plate/Slate rendering, the workspace appeared empty even when the report had sections.
+
+### Finding 5 — P1
+
+**File:** `components/workspace/workspace-layout.tsx`  
+**Issue:** NDIS review button was unconnected.
+
+`WorkspaceFooter` accepted `onRunReview`, but `WorkspaceLayout` never passed a handler. The rendered Run NDIS review button did not call `/api/review`.
+
+### Finding 6 — P1
+
+**File:** `supabase/migrations/002_match_function.sql`  
+**Issue:** RAG section filter had an `OR` precedence bug.
+
+The SQL predicate applied `filter_section` only to the user-specific branch because `AND` binds tighter than `OR`.
+
+As a result, foundational exemplar matches could ignore the requested section and retrieve chunks from every section.
+
+### Finding 7 — P1
+
+**File:** `scripts/seed-foundational.ts`  
+**Issue:** Foundational seed embeddings did not match the stored vector size.
+
+The exemplar table stores `vector(1536)`.
+
+The seed script requested `text-embedding-3-large` without a `dimensions` override. That model defaults to a larger vector size, so inserts would fail unless `dimensions: 1536` was specified.
+
+### Finding 8 — P1
+
+**File:** `agents/server.py`  
+**Issue:** Agent service allowed an empty shared secret.
+
+If `AGENT_API_KEY` was unset, `verify_key` accepted every request.
+
+The Vercel routes also defaulted agent config to empty strings / localhost, meaning the agent layer was either unusable in Vercel or unauthenticated if deployed without a key.
+
+### Finding 9 — P2
+
+**File:** `middleware.ts`  
+**Issue:** Next 16 middleware convention is deprecated.
+
+Next 16 builds warn that `middleware.ts` is deprecated in favor of `proxy.ts`.
+
+### Finding 10 — P2
+
+**File:** `hooks/use-auto-save.ts`  
+**Issue:** Auto-save hook violated the React ref mutation rule.
+
+React 19 lint rejected mutating `saveRef.current` during render.
+
+The assignment needed to move into an effect or a supported event/ref pattern.
+
+---
+
+## 6. Fixes Implemented
+
+### 6.1 Generate Page Fixes
+
+**File:** `app/generate/page.tsx`
+
+The quick-generate path was corrected so it writes a valid assessment row.
+
+Changes:
+
+- Removed the invalid `domains` insert field.
+- Changed invalid `status: "quick_generate"` to `status: "generating"`.
+- Persisted participant/report metadata:
+  - `title`
+  - `participant_name`
+  - `ndis_number`
+  - `assessor_name`
+  - `clinical_notes`
+  - `functional_domains: {}`
+- After generation and coherence check complete, updates the assessment to `status: "complete"`.
+- Removed unused state:
+  - `currentSectionName`
+  - `isCoherenceRunning`
+- Coherence fetch now checks `response.ok` and throws the JSON error message.
+- `runGeneration` dependencies were updated to include all referenced values:
+  - `assessor`
+  - `clinicalNotes`
+  - `ndisNumber`
+  - `participantName`
+  - `supabase`
+
+### 6.2 Generate API Fixes
+
+**File:** `app/api/generate/route.ts`
+
+The generate API now handles assessment-based report creation correctly.
+
+Changes:
+
+- Assessment load is scoped by authenticated `user_id`.
+- Coherence check report fetch/update is scoped by authenticated `user_id`.
+- Assessment generation path creates a `sessions` row when there is no incoming `sessionId`.
+- Report insert now includes:
+  - `session_id`
+  - `user_id`
+  - `status: "generating"`
+  - `assessment_id`
+- Missing legacy `sessionId` is now validated.
+- Session insert errors are returned as JSON instead of ignored.
+- Report insert errors are returned as JSON instead of ignored.
+- `newReport!.id` is no longer blindly assumed after a failed insert.
+- After report creation, the session is linked back with `sessions.report_id`.
+- Report fetch/update operations are scoped by authenticated `user_id`.
+- Section generation errors now mark the report as `failed` and return JSON error details.
+- Coherence check errors are caught, mark the report `failed`, and return JSON error details.
+
+Impact:
+
+- Generate now reaches the sequential section generation screen.
+- The original Supabase schema failure is no longer the immediate blocker.
+
+### 6.3 Revision Chat API Fixes
+
+**File:** `app/api/chat/route.ts`
+
+The chat API now supports report-page revision chat.
+
+Changes:
+
+- Accepts `reportId` and `activeSectionId` in addition to legacy `sessionId`.
+- Rejects requests that provide neither `reportId` nor `sessionId`.
+- Looks up the report by `id` when `reportId` is supplied.
+- Falls back to lookup by `session_id` for legacy session chat.
+- Always scopes report lookup by authenticated `user_id`.
+- Selects `session_id` so message persistence can still use the correct session when available.
+- Builds focused section context from `activeSectionId`.
+- Persists assistant messages only when a usable session id exists:
+  - `report.session_id ?? sessionId`
+- Adds `toUIMessageStreamResponse({ onError })` so model/API failures become a controlled message instead of a silent break.
+
+### 6.4 Revision Chat UI Fixes
+
+**File:** `components/report/revision-chat.tsx`
+
+Changes:
+
+- Reads `error` and `clearError` from `useChat`.
+- Clears stale errors before sending a new message.
+- Displays a visible destructive error box:
+  - `Revision chat is unavailable. Check the model provider key and try again.`
+
+Browser result:
+
+- Clicking Revise with AI focuses the chat on the selected section.
+- Sending a revision request posts the user message.
+- With the current invalid OpenAI key, the UI now shows the unavailable message instead of failing silently.
+
+### 6.5 Workspace Plate Editor Fixes
+
+**File:** `components/workspace/plate-editor.tsx`
+
+Changes:
+
+- Imported `PlateContent` from `platejs/react`.
+- Replaced the raw `contentEditable` div with:
+  - `PlateContent`
+- Preserved read-only behavior and editor styling.
+
+Browser result:
+
+- `/workspace/a0481931-2b55-4bcb-b632-da0ffe2d3237` now renders the report content in the editor area.
+- The workspace is no longer blank.
+
+### 6.6 Workspace NDIS Review Fixes
+
+**Files:**
+
+- `components/workspace/workspace-layout.tsx`
+- `components/workspace/workspace-footer.tsx`
+- `app/globals.css`
+
+Changes in `workspace-layout.tsx`:
+
+- Added `mapPlannerFlags()` helper.
+- Added `isReviewing` state.
+- Added `reviewError` state.
+- Existing planner review data is mapped consistently on load.
+- `jumpTo` now calls `setActiveSection(id)`, which also removed an unused setter issue.
+- Added `handleRunReview`.
+- `handleRunReview` posts to `/api/review` with `reportId`.
+- Returned flags are mapped into local planner review state.
+- Returned `planner_review` is stored in local report state.
+- API errors are surfaced in the workspace UI.
+- Topbar `NDIS Review` button calls `handleRunReview`.
+- Footer `Run NDIS review` button calls `handleRunReview`.
+- Review buttons are disabled while a review is running.
+
+Changes in `workspace-footer.tsx`:
+
+- Added optional `reviewing` prop.
+- Button label changes to `Reviewing...` while active.
+- Button disables while active.
+
+Changes in `globals.css`:
+
+- Added `.tn-ws-error` styling for workspace-level review errors.
+
+Browser result:
+
+- Clicking NDIS Review now calls `/api/review`.
+- With agent env vars missing, the UI shows:
+  - `Agent service is not configured`
+
+This is the intended safe failure mode for an unconfigured agent service.
+
+### 6.7 RAG Match Function Fixes
+
+**Files:**
+
+- `supabase/migrations/002_match_function.sql`
+- `supabase/migrations/004_fix_match_exemplar_filter.sql`
+
+Changes:
+
+- Added parentheses around the user-specific / foundational `OR` branch so `filter_section` applies to both.
+- Added a new follow-up migration so databases that already applied migration `002` can still receive the corrected function.
+
+Impact:
+
+- Section-filtered generation should no longer pull foundational chunks from unrelated sections.
+
+### 6.8 Foundational Seed Embedding Fix
+
+**File:** `scripts/seed-foundational.ts`
+
+Change:
+
+- Added `dimensions: 1536` to `openai.embeddings.create`.
+
+Impact:
+
+- `text-embedding-3-large` output now matches the `vector(1536)` schema.
+
+### 6.9 Agent Service Security Fixes
+
+**Files:**
+
+- `agents/server.py`
+- `app/api/review/route.ts`
+- `app/api/companion/route.ts`
+
+Changes in `agents/server.py`:
+
+- `verify_key` no longer accepts requests when `AGENT_API_KEY` is unset.
+- Missing agent key now returns a service configuration error instead of allowing all requests.
+- `ReviewRequest.user_id` is now required.
+- `CompanionRequest.user_id` was added and is required.
+
+Changes in `app/api/review/route.ts`:
+
+- Removed default `AGENT_SERVICE_URL` fallback to localhost.
+- Removed default empty `AGENT_API_KEY`.
+- Returns `503` when agent config is missing.
+- Verifies the report belongs to the authenticated user before calling the agent service.
+- Catches agent fetch errors and returns:
+  - `Agent service is unavailable`
+- Report update is scoped by authenticated `user_id`.
+
+Changes in `app/api/companion/route.ts`:
+
+- Removed default `AGENT_SERVICE_URL` fallback to localhost.
+- Removed default empty `AGENT_API_KEY`.
+- Returns `503` when agent config is missing.
+- Verifies the assessment belongs to the authenticated user before calling the agent service.
+- Sends `user_id` to the agent service.
+
+Impact:
+
+- Agent endpoints are no longer silently unauthenticated when env vars are missing.
+- Vercel deployments without agent config fail closed instead of defaulting to unsafe behavior.
+
+### 6.10 Next 16 Proxy Migration
+
+**Files:**
+
+- Removed: `middleware.ts`
+- Added: `proxy.ts`
+
+Changes:
+
+- Renamed `middleware.ts` to `proxy.ts`.
+- Renamed the exported function from `middleware` to `proxy`.
+
+Build result:
+
+- Next 16 build now reports:
+  - `ƒ Proxy (Middleware)`
+- The deprecated convention warning is addressed.
+
+### 6.11 Auto-Save React Ref Fix
+
+**File:** `hooks/use-auto-save.ts`
+
+Change:
+
+- Moved `saveRef.current = save` into a `useEffect`.
+
+Impact:
+
+- React 19 lint no longer rejects the hook for mutating a ref during render.
+
+---
+
+## 7. Additional Cleanup Completed During Fix Pass
+
+Several related lint/type issues were cleaned up while making the main fixes.
+
+### File Upload Portal Guard
+
+**File:** `components/ui/file-upload.tsx`
+
+Changes:
+
+- Removed unnecessary `mounted` state and effect.
+- Portal rendering is now guarded with:
+  - `typeof document === "undefined"`
+
+### Report Viewer Cleanup
+
+**File:** `components/report/report-viewer.tsx`
+
+Changes:
+
+- Removed unused `Button` import.
+- Refactored `fetchReport` to return `Report | null`.
+- Effect now uses a promise callback instead of an ignored async function.
+- Fixed nested `sections` mutation by copying section objects before setting `insufficientData`.
+
+### Settings Exemplar List Cleanup
+
+**File:** `components/settings/exemplar-list.tsx`
+
+Changes:
+
+- Memoized `createClient()`.
+- Refactored fetch flow to return data cleanly.
+- Effect now uses a promise callback.
+- Reloads exemplar list after delete.
+
+### Reports List Cleanup
+
+**File:** `components/reports/report-list.tsx`
+
+Changes:
+
+- Memoized `createClient()`.
+- Added missing effect dependency.
+
+### Report Card Cleanup
+
+**File:** `components/reports/report-card.tsx`
+
+Changes:
+
+- Removed unused `id` prop.
+- Removed the corresponding caller prop.
+
+### Progress Screen Cleanup
+
+**File:** `components/generate/progress-screen.tsx`
+
+Changes:
+
+- Removed unused imports.
+
+### Domain Mapper Cleanup
+
+**File:** `lib/ai/domain-mapper.ts`
+
+Changes:
+
+- `mapPartE` no longer accepts an unused argument.
+
+### Revision Prompt Context Fix
+
+**File:** `lib/ai/revise.ts`
+
+Changes:
+
+- `fullReportContext` is now used by appending it to clinical context.
+
+### Workspace Sidebar Cleanup
+
+**File:** `components/workspace/toc-sidebar.tsx`
+
+Changes:
+
+- Removed unused `cn` import.
+
+### Workspace Toolbar Measurement Lint Handling
+
+**File:** `components/workspace/editor-toolbar.tsx`
+
+Changes:
+
+- Removed unused `X` import.
+- Added a targeted ESLint disable for the legitimate DOM selection measurement case where position may be set to `null`.
+
+### Flag Popover Measurement Lint Handling
+
+**File:** `components/workspace/flag-popover.tsx`
+
+Changes:
+
+- Added a targeted ESLint disable before a legitimate DOM measurement position update.
+
+### Login Redirect Fix
+
+**File:** `app/login/page.tsx`
+
+Changes:
+
+- Supabase Auth redirect now points to `/generate`.
+- It previously referenced the removed `/chat` route.
+
+### Revise API User Scoping
+
+**File:** `app/api/revise/route.ts`
+
+Changes:
+
+- Report select/update operations are now scoped by authenticated `user_id`.
+
+---
+
+## 8. Verification Commands
+
+The following static verification commands were run after fixes.
+
+### Lint
+
+Command:
+
+```bash
+npm run lint
+```
+
+Result:
+
+- Passed.
+- Exit code `0`.
+
+### TypeScript
+
+Command:
+
+```bash
+npx tsc --noEmit
+```
+
+Result:
+
+- Passed.
+- Exit code `0`.
+
+### Production Build
+
+Command:
+
+```bash
+npm run build
+```
+
+Result:
+
+- Passed.
+- Exit code `0`.
+- Next.js version shown by build:
+  - `Next.js 16.2.4 (Turbopack)`
+- Build output included:
+  - `ƒ Proxy (Middleware)`
+
+Routes generated in the build included:
+
+- `/`
+- `/_not-found`
+- `/api/chat`
+- `/api/companion`
+- `/api/generate`
+- `/api/ingest`
+- `/api/refine`
+- `/api/review`
+- `/api/revise`
+- `/generate`
+- `/login`
+- `/report/[id]`
+- `/reports`
+- `/settings`
+- `/workspace/[id]`
+
+---
+
+## 9. Browser / Computer Use Verification
+
+The app was started locally:
+
+```bash
+npm run dev -- --port 3000
+```
+
+Local URL:
+
+- `http://localhost:3000`
+
+The dev server was stopped after testing.
+
+### Login
+
+Navigating to `/login` redirected into the authenticated app because the browser already had a valid test session.
+
+The authenticated app loaded `/generate`.
+
+### Generate Flow
+
+Test data entered:
+
+- Participant name: `E2E Test Participant`
+- NDIS number: `430000001`
+- Assessor: `Codex OT`
+- Clinical notes: a short functional summary covering reduced mobility, fatigue, showering, meal preparation, anxiety with community access, medication prompting, four-wheel walker use, weekly OT, support worker assistance, family support, and goals.
+
+Flow tested:
+
+1. Filled the generate form.
+2. Clicked Generate report.
+3. The app detected thin domains and showed the warning panel.
+4. Clicked Generate anyway.
+5. The app reached the sequential generation screen.
+6. The first `/api/generate` call failed at the model provider boundary.
+
+Observed final UI error:
+
+- `401 Incorrect API key provided...`
+
+Interpretation:
+
+- The old Supabase assessment insert error was fixed.
+- Assessment/session/report creation now proceeds far enough to call the model API.
+- Full generation cannot complete until the model provider key is replaced with a valid key.
+
+### Workspace Flow
+
+Route tested:
+
+- `/workspace/a0481931-2b55-4bcb-b632-da0ffe2d3237`
+
+Observed:
+
+- Workspace loaded.
+- Report content rendered in the editor area.
+- The previous blank workspace issue was fixed.
+- The left table-of-contents rendered report sections.
+- The bottom action bar rendered Print, Run NDIS review, and Download DOCX.
+
+### NDIS Review Flow
+
+Action tested:
+
+- Clicked NDIS Review / Run NDIS review.
+
+Observed:
+
+- The UI called `/api/review`.
+- The API returned `503`.
+- The workspace showed:
+  - `Agent service is not configured`
+
+Interpretation:
+
+- The button is no longer inert.
+- The API now fails closed when agent environment variables are missing.
+- Full NDIS review requires valid agent service configuration:
+  - `AGENT_SERVICE_URL`
+  - `AGENT_API_KEY`
+
+### Report Viewer Flow
+
+Route tested:
+
+- `/report/a0481931-2b55-4bcb-b632-da0ffe2d3237`
+
+Observed:
+
+- Report viewer loaded.
+- Existing sections rendered.
+- Revision Chat panel rendered.
+- Clicking `Revise with AI` focused the chat on `Report Overview`.
+
+### Revision Chat Flow
+
+Action tested:
+
+1. Clicked `Revise with AI` for `Report Overview`.
+2. Entered:
+   - `Suggest a concise revision focus for this section.`
+3. Submitted the message.
+
+Observed:
+
+- The user message appeared in the chat.
+- The API request completed without the old identifier/session mismatch.
+- The current invalid model key caused the AI call to fail.
+- The UI showed:
+  - `Revision chat is unavailable. Check the model provider key and try again.`
+
+Interpretation:
+
+- Chat is now wired to the current report and selected section.
+- The remaining blocker is the invalid model provider key, not the `reportId` / `sessionId` mismatch.
+
+### Browser Console / Dev Server Notes
+
+The dev server showed hydration mismatch warnings caused by browser extension attributes, including:
+
+- `data-arp`
+- `cz-shortcut-listen`
+
+These warnings appear to come from installed browser extensions modifying the DOM before React hydration. They were not treated as application regressions.
+
+---
+
+## 10. Current Environment Blockers
+
+### Invalid Model Provider Key
+
+The current OpenAI/model provider key returns:
+
+- `401 invalid_api_key`
+
+Effects:
+
+- Full report generation cannot complete.
+- Revision chat cannot stream an answer.
+
+What was still verified:
+
+- Generate now reaches the model call.
+- API errors are surfaced to the user.
+- Failed generation paths no longer fail due to local schema mistakes.
+- Revision chat now binds to the current report/section and shows a controlled error.
+
+### Agent Service Not Configured
+
+The following are missing or not configured for local/Vercel testing:
+
+- `AGENT_SERVICE_URL`
+- `AGENT_API_KEY`
+
+Effects:
+
+- NDIS review cannot complete.
+- Companion agent calls cannot complete.
+
+What was still verified:
+
+- The workspace NDIS Review button calls the API.
+- The API fails closed with `503`.
+- The UI surfaces `Agent service is not configured`.
+
+### React Doctor Not Run
+
+The `react-doctor` skill recommends:
+
+```bash
+npx -y react-doctor@latest . --verbose --diff
+```
+
+However, `react-doctor` is not installed locally.
+
+Running that command would download and run newly acquired software, which requires explicit action-time approval. It was not run in this session.
+
+---
+
+## 11. Files Changed
+
+At the end of the fix pass, these files were modified or added.
+
+### Modified
+
+- `.gitignore`
+- `agents/server.py`
+- `app/api/chat/route.ts`
+- `app/api/companion/route.ts`
+- `app/api/generate/route.ts`
+- `app/api/review/route.ts`
+- `app/api/revise/route.ts`
+- `app/generate/page.tsx`
+- `app/globals.css`
+- `app/login/page.tsx`
+- `components/generate/progress-screen.tsx`
+- `components/report/report-viewer.tsx`
+- `components/report/revision-chat.tsx`
+- `components/reports/report-card.tsx`
+- `components/reports/report-list.tsx`
+- `components/settings/exemplar-list.tsx`
+- `components/ui/file-upload.tsx`
+- `components/workspace/editor-toolbar.tsx`
+- `components/workspace/flag-popover.tsx`
+- `components/workspace/plate-editor.tsx`
+- `components/workspace/toc-sidebar.tsx`
+- `components/workspace/workspace-footer.tsx`
+- `components/workspace/workspace-layout.tsx`
+- `hooks/use-auto-save.ts`
+- `lib/ai/domain-mapper.ts`
+- `lib/ai/revise.ts`
+- `package-lock.json`
+- `scripts/seed-foundational.ts`
+- `supabase/migrations/002_match_function.sql`
+
+### Deleted / Replaced
+
+- `middleware.ts`
+
+### Added
+
+- `proxy.ts`
+- `supabase/migrations/004_fix_match_exemplar_filter.sql`
+- `docs/recent-changes`
+
+---
+
+## 12. Current Git Worktree Notes
+
+The worktree remains dirty because the user did not ask for a commit.
+
+Important notes:
+
+- The defensive pre-pull stash still exists.
+- `.env.local` exists locally but is ignored.
+- No secrets were intentionally documented.
+- No destructive git operation was performed.
+- No commit was created.
+- No branch was created.
+- No PR was opened.
+
+---
+
+## 13. Follow-Up Needed
+
+To complete a full production-level E2E beyond this session's code fixes:
+
+1. Replace the invalid model provider/OpenAI key.
+2. Configure agent service env vars:
+   - `AGENT_SERVICE_URL`
+   - `AGENT_API_KEY`
+3. Apply the new Supabase migration:
+   - `supabase/migrations/004_fix_match_exemplar_filter.sql`
+4. Re-run foundational seeding if needed:
+   - `scripts/seed-foundational.ts`
+5. Re-run full browser E2E:
+   - Login
+   - Generate full report
+   - Coherence check
+   - Report viewer
+   - Workspace editor
+   - NDIS review
+   - Revision chat
+   - DOCX export
+6. Optionally approve and run React Doctor:
+   - `npx -y react-doctor@latest . --verbose --diff`
+
+---
+
+## 14. Final State Of This Session
+
+All ten review findings were addressed in code.
+
+Verification completed:
+
+- `npm run lint` passed.
+- `npx tsc --noEmit` passed.
+- `npm run build` passed.
+- Browser smoke testing confirmed the core wiring fixes.
+
+Remaining failures are environment/configuration failures rather than the original application wiring defects:
+
+- Invalid model provider key blocks full AI generation and chat responses.
+- Missing agent service config blocks NDIS planner review.

@@ -195,7 +195,7 @@ function mapPartD(a: Assessment): string {
   return formatJsonb(a.standardized_scores, 'STANDARDISED ASSESSMENT SCORES')
 }
 
-function mapPartE(a: Assessment): string {
+function mapPartE(): string {
   return (
     'NOTE: This is the summary and recommendations section. ' +
     'Full report data from Parts A-D has been provided in previous sections. ' +

@@ -1,7 +1,12 @@
 'use client'
 
 import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
-import { Plate, usePlateEditor, type PlateEditor as PlateEditorType } from 'platejs/react'
+import {
+  Plate,
+  PlateContent,
+  usePlateEditor,
+  type PlateEditor as PlateEditorType,
+} from 'platejs/react'
 import type { Value } from 'platejs'
 import { editorPlugins } from '@/lib/editor/plugins'
 import { EditorToolbar } from './editor-toolbar'
@@ -36,9 +41,8 @@ export const PlateDocEditor = forwardRef<PlateEditorHandle, PlateEditorProps>(
       <div className="tn-doc">
         <Plate editor={editor} onChange={handleChange}>
           <EditorToolbar />
-          <div
-            contentEditable={!readOnly}
-            suppressContentEditableWarning
+          <PlateContent
+            readOnly={readOnly}
             className="tn-plate-editor outline-none min-h-[600px]"
             style={{ whiteSpace: 'pre-wrap' }}
           />

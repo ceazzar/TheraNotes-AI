@@ -28,6 +28,7 @@ async function main() {
 
     const embeddings = await openai.embeddings.create({
       model: 'text-embedding-3-large',
+      dimensions: 1536,
       input: chunks.map(c => c.content),
     })
 

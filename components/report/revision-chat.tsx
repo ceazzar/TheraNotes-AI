@@ -34,7 +34,7 @@ export function RevisionChat({
 
   const [input, setInput] = useState('')
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error, clearError } = useChat({
     transport,
   })
 
@@ -47,6 +47,7 @@ export function RevisionChat({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
+    clearError()
     sendMessage({ text: input })
     setInput('')
   }
@@ -115,6 +116,11 @@ export function RevisionChat({
             </div>
           )
         })}
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            Revision chat is unavailable. Check the model provider key and try again.
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

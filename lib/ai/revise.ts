@@ -66,6 +66,9 @@ export async function reviseSection(
     sectionId, sectionName, currentContent,
     feedback, fullReportContext, userId, clinicalNotes,
   } = params
+  const clinicalContext = fullReportContext
+    ? `${clinicalNotes}\n\nFULL REPORT CONTEXT:\n${fullReportContext}`.trim()
+    : clinicalNotes
 
   const sectionTemplate = template.sections.find(
     (s: { name: string }) => s.name === sectionName
@@ -87,7 +90,7 @@ export async function reviseSection(
     sectionTemplate?.description ?? '',
     sectionTemplate?.typical_length ?? '2-3 paragraphs',
     allExemplars,
-    clinicalNotes,
+    clinicalContext,
     undefined,
     currentContent,
     feedback,

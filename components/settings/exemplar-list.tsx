@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Trash2 } from 'lucide-react'
@@ -17,36 +17,50 @@ interface ExemplarListProps {
 export function ExemplarList({ refreshKey }: ExemplarListProps) {
   const [exemplars, setExemplars] = useState<Exemplar[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
-  const loadExemplars = useCallback(async () => {
-    setIsLoading(true)
+  const fetchExemplars = useCallback(async (): Promise<Exemplar[]> => {
     const { data } = await supabase
       .from('exemplar_chunks')
       .select('source_file')
 
-    if (data) {
-      const grouped = data.reduce(
-        (acc: Record<string, number>, row) => {
-          acc[row.source_file] = (acc[row.source_file] || 0) + 1
-          return acc
-        },
-        {} as Record<string, number>
-      )
+    if (!data) return []
 
-      setExemplars(
-        Object.entries(grouped).map(([source_file, chunk_count]) => ({
-          source_file,
-          chunk_count,
-        }))
-      )
-    }
-    setIsLoading(false)
+    const grouped = data.reduce(
+      (acc: Record<string, number>, row) => {
+        acc[row.source_file] = (acc[row.source_file] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>
+    )
+
+    return Object.entries(grouped).map(([source_file, chunk_count]) => ({
+      source_file,
+      chunk_count,
+    }))
   }, [supabase])
 
   useEffect(() => {
-    loadExemplars()
-  }, [loadExemplars, refreshKey])
+    let isActive = true
+
+    void fetchExemplars().then((nextExemplars) => {
+      if (!isActive) return
+      setExemplars(nextExemplars)
+      setIsLoading(false)
+    })
+
+    return () => {
+      isActive = false
+    }
+  }, [fetchExemplars, refreshKey])
+
+  const reloadExemplars = useCallback(() => {
+    setIsLoading(true)
+    void fetchExemplars().then((nextExemplars) => {
+      setExemplars(nextExemplars)
+      setIsLoading(false)
+    })
+  }, [fetchExemplars])
 
   const handleDelete = async (sourceFile: string) => {
     const { error } = await supabase
@@ -64,7 +78,7 @@ export function ExemplarList({ refreshKey }: ExemplarListProps) {
           .from('exemplars')
           .remove([`${user.id}/${sourceFile}`])
       }
-      loadExemplars()
+      reloadExemplars()
     }
   }
 

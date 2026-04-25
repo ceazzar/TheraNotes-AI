@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Bold, Italic, Heading2, List, Sparkles, ArrowRight, X } from 'lucide-react'
+import { Bold, Italic, Heading2, List, Sparkles, ArrowRight } from 'lucide-react'
 import { useEditorRef, useEditorSelection, type PlateEditor } from 'platejs/react'
 
 export function EditorToolbar() {
@@ -17,6 +17,7 @@ export function EditorToolbar() {
 
   useEffect(() => {
     if (!selection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- position follows DOM selection state.
       if (!showRefine) setPosition(null)
       return
     }

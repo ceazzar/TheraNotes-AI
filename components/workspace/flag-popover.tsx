@@ -29,6 +29,7 @@ export function FlagPopover({
     left = Math.max(12, Math.min(window.innerWidth - w - 12, left));
     let top = r.bottom + 8;
     if (top + 260 > window.innerHeight) top = r.top - 260;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this is a DOM measurement effect.
     setPos({ top, left });
   }, [anchor]);
 

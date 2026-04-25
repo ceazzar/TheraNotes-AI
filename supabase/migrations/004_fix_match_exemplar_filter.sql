@@ -27,8 +27,7 @@ BEGIN
       (filter_user_id IS NULL AND ec.user_id IS NULL)
       OR (filter_user_id IS NOT NULL AND ec.user_id = filter_user_id)
     )
-  AND
-    (filter_section IS NULL OR ec.section = filter_section)
+    AND (filter_section IS NULL OR ec.section = filter_section)
   ORDER BY ec.embedding <=> query_embedding
   LIMIT match_count;
 END;

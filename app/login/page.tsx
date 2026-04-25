@@ -33,7 +33,7 @@ export default function LoginPage() {
           appearance={{ theme: ThemeSupa }}
           theme="dark"
           providers={[]}
-          redirectTo={`${typeof window !== 'undefined' ? window.location.origin : ''}/chat`}
+          redirectTo={`${typeof window !== 'undefined' ? window.location.origin : ''}/generate`}
         />
       </div>
     </div>

@@ -4,11 +4,17 @@ import { Printer, Shield, Download } from 'lucide-react'
 
 interface WorkspaceFooterProps {
   saving: boolean
+  reviewing?: boolean
   onExportDocx?: () => void
   onRunReview?: () => void
 }
 
-export function WorkspaceFooter({ saving, onExportDocx, onRunReview }: WorkspaceFooterProps) {
+export function WorkspaceFooter({
+  saving,
+  reviewing = false,
+  onExportDocx,
+  onRunReview,
+}: WorkspaceFooterProps) {
   return (
     <div className="tn-footer">
       <span className="tn-saved" data-saving={saving}>
@@ -25,8 +31,9 @@ export function WorkspaceFooter({ saving, onExportDocx, onRunReview }: Workspace
         <button
           className="tn-btn tn-btn-outline tn-btn-sm"
           onClick={onRunReview}
+          disabled={reviewing}
         >
-          <Shield size={14} /> Run NDIS review
+          <Shield size={14} /> {reviewing ? 'Reviewing...' : 'Run NDIS review'}
         </button>
         <button
           className="tn-btn tn-btn-primary tn-btn-sm"

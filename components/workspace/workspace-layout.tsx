@@ -34,6 +34,21 @@ interface PlannerFlag {
   refined?: string
 }
 
+function mapPlannerFlags(plannerFlags: PlannerFlag[]): Flag[] {
+  return plannerFlags.map((f, i) => ({
+    id: `flag-${i}`,
+    sev: f.severity,
+    section: f.sectionId,
+    title: f.issue,
+    desc: f.recommendation,
+    fix: f.recommendation,
+    rationale: f.ndisRationale,
+    refined: f.refined ?? '',
+    originalText: f.originalText ?? '',
+    resolved: false,
+  }))
+}
+
 interface WorkspaceLayoutProps {
   reportId: string
 }
@@ -46,6 +61,8 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   const [sectionKeys, setSectionKeys] = useState<string[]>([])
   const [tocSections, setTocSections] = useState<ReportSection[]>([])
   const [flags, setFlags] = useState<Flag[]>([])
+  const [isReviewing, setIsReviewing] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   const [activeSection, setActiveSection] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -90,20 +107,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
       setTocSections(toc)
 
       // Convert planner flags
-      const plannerFlags = r.planner_review?.flags ?? []
-      const mappedFlags: Flag[] = plannerFlags.map((f, i) => ({
-        id: `flag-${i}`,
-        sev: f.severity,
-        section: f.sectionId,
-        title: f.issue,
-        desc: f.recommendation,
-        fix: f.recommendation,
-        rationale: f.ndisRationale,
-        refined: f.refined ?? '',
-        originalText: f.originalText ?? '',
-        resolved: false,
-      }))
-      setFlags(mappedFlags)
+      setFlags(mapPlannerFlags(r.planner_review?.flags ?? []))
 
       // Fetch participant info
       if (reportData.assessment_id) {
@@ -156,6 +160,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     : 0
 
   const jumpTo = useCallback((id: string) => {
+    setActiveSection(id)
     const headings = scrollRef.current?.querySelectorAll('h2')
     if (!headings) return
     for (const h of headings) {
@@ -170,6 +175,42 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     const first = flags.find((f) => !f.resolved)
     if (first) jumpTo(first.section)
   }, [flags, jumpTo])
+
+  const handleRunReview = useCallback(async () => {
+    setIsReviewing(true)
+    setReviewError(null)
+
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId }),
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to run NDIS review')
+      }
+
+      const nextFlags = mapPlannerFlags(data.flags ?? [])
+      setFlags(nextFlags)
+      setReport((prev) =>
+        prev
+          ? {
+              ...prev,
+              planner_review: {
+                flags: data.flags ?? [],
+                reviewed_at: new Date().toISOString(),
+              },
+            }
+          : prev
+      )
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to run NDIS review')
+    } finally {
+      setIsReviewing(false)
+    }
+  }, [reportId])
 
   const handleExportDocx = useCallback(async () => {
     const editor = editorRef.current?.editor
@@ -278,11 +319,20 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
             <button className="tn-btn tn-btn-ghost tn-btn-xs">
               <Search size={13} /> Find
             </button>
-            <button className="tn-btn tn-btn-ghost tn-btn-xs">
-              <Shield size={13} /> NDIS Review
+            <button
+              className="tn-btn tn-btn-ghost tn-btn-xs"
+              onClick={handleRunReview}
+              disabled={isReviewing}
+            >
+              <Shield size={13} /> {isReviewing ? 'Reviewing...' : 'NDIS Review'}
             </button>
           </div>
         </div>
+        {reviewError && (
+          <div className="tn-ws-error" role="status">
+            {reviewError}
+          </div>
+        )}
 
         {/* Paper scroll area */}
         <div className="tn-paper-scroll" ref={scrollRef}>
@@ -301,6 +351,8 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         <WorkspaceFooter
           saving={saveStatus === 'saving'}
           onExportDocx={handleExportDocx}
+          onRunReview={handleRunReview}
+          reviewing={isReviewing}
         />
       </div>
     </div>

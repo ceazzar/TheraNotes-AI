@@ -165,14 +165,8 @@ type FileUploadContentProps = React.HTMLAttributes<HTMLDivElement>
 
 function FileUploadContent({ className, ...props }: FileUploadContentProps) {
   const context = useContext(FileUploadContext)
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
-
-  if (!context?.isDragging || !mounted || context?.disabled) {
+  if (!context?.isDragging || context?.disabled || typeof document === "undefined") {
     return null
   }
 

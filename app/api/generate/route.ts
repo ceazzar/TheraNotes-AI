@@ -14,15 +14,36 @@ export async function POST(request: NextRequest) {
   // Coherence check mode
   if (body.action === 'coherence_check') {
     const { data: report } = await supabase
-      .from('reports').select('sections').eq('id', body.reportId).single()
+      .from('reports')
+      .select('sections')
+      .eq('id', body.reportId)
+      .eq('user_id', user.id)
+      .single()
     if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
 
     const fullReport = Object.entries(report.sections as Record<string, { title: string; content: string }>)
       .map(([, s]) => `## ${s.title}\n\n${s.content}`).join('\n\n')
 
-    const coherenceResult = await runCoherenceCheck({ fullReport, clinicalNotes: body.clinicalNotes ?? '' })
-    await supabase.from('reports').update({ coherence_result: coherenceResult, status: 'ready' }).eq('id', body.reportId)
-    return NextResponse.json({ coherenceResult })
+    try {
+      const coherenceResult = await runCoherenceCheck({ fullReport, clinicalNotes: body.clinicalNotes ?? '' })
+      await supabase
+        .from('reports')
+        .update({ coherence_result: coherenceResult, status: 'ready' })
+        .eq('id', body.reportId)
+        .eq('user_id', user.id)
+      return NextResponse.json({ coherenceResult })
+    } catch (err) {
+      await supabase
+        .from('reports')
+        .update({ status: 'failed' })
+        .eq('id', body.reportId)
+        .eq('user_id', user.id)
+
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Failed to run coherence check' },
+        { status: 500 }
+      )
+    }
   }
 
   // Per-section generation
@@ -36,7 +57,11 @@ export async function POST(request: NextRequest) {
   let assessment: Assessment | undefined
   if (assessmentId) {
     const { data: assessmentRow, error: assessmentError } = await supabase
-      .from('assessments').select('*').eq('id', assessmentId).single()
+      .from('assessments')
+      .select('*')
+      .eq('id', assessmentId)
+      .eq('user_id', user.id)
+      .single()
     if (assessmentError || !assessmentRow) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 })
     }
@@ -44,17 +69,71 @@ export async function POST(request: NextRequest) {
   }
 
   if (!currentReportId) {
-    // Hybrid path: link report to assessment; legacy path: link to session
-    const insertPayload = assessment
-      ? { assessment_id: assessmentId, user_id: user.id, status: 'generating' }
-      : { session_id: sessionId, user_id: user.id, status: 'generating' }
-    const { data: newReport } = await supabase
+    let sessionIdForReport = sessionId as string | undefined
+
+    if (assessment && !sessionIdForReport) {
+      const { data: session, error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
+          title: assessment.participant_name
+            ? `${assessment.participant_name} FCA`
+            : 'Quick Generate FCA',
+          status: 'active',
+        })
+        .select('id')
+        .single()
+
+      if (sessionError || !session) {
+        return NextResponse.json(
+          { error: sessionError?.message || 'Failed to create session' },
+          { status: 500 }
+        )
+      }
+
+      sessionIdForReport = session.id
+    }
+
+    if (!sessionIdForReport) {
+      return NextResponse.json(
+        { error: 'sessionId is required when assessmentId is not provided' },
+        { status: 400 }
+      )
+    }
+
+    const insertPayload = {
+      session_id: sessionIdForReport,
+      user_id: user.id,
+      status: 'generating',
+      ...(assessment ? { assessment_id: assessmentId } : {}),
+    }
+
+    const { data: newReport, error: reportError } = await supabase
       .from('reports').insert(insertPayload)
       .select('id').single()
-    currentReportId = newReport!.id
+
+    if (reportError || !newReport) {
+      return NextResponse.json(
+        { error: reportError?.message || 'Failed to create report' },
+        { status: 500 }
+      )
+    }
+
+    currentReportId = newReport.id
+
+    await supabase
+      .from('sessions')
+      .update({ report_id: currentReportId })
+      .eq('id', sessionIdForReport)
+      .eq('user_id', user.id)
   }
 
-  const { data: report } = await supabase.from('reports').select('sections').eq('id', currentReportId).single()
+  const { data: report } = await supabase
+    .from('reports')
+    .select('sections')
+    .eq('id', currentReportId)
+    .eq('user_id', user.id)
+    .single()
   const existingSections = (report?.sections ?? {}) as Record<string, { title: string; content: string }>
   const previousSections: Record<string, string> = {}
   for (const [key, val] of Object.entries(existingSections)) previousSections[key] = val.content
@@ -76,20 +155,38 @@ export async function POST(request: NextRequest) {
     correctionContext = `\n\nPATTERNS TO AVOID (based on past clinician corrections for this section):\n${patterns}\n\nApply these corrections proactively — do not repeat the same issues.`
   }
 
-  const result = await generateSection({
-    sectionId,
-    ...(assessment ? { assessment } : { clinicalNotes: (clinicalNotes ?? '') + correctionContext }),
-    userId: user.id,
-    previousSections,
-    questionnaireData,
-    correctionContext: assessment ? correctionContext : undefined,
-  })
+  let result
+  try {
+    result = await generateSection({
+      sectionId,
+      ...(assessment ? { assessment } : { clinicalNotes: (clinicalNotes ?? '') + correctionContext }),
+      userId: user.id,
+      previousSections,
+      questionnaireData,
+      correctionContext: assessment ? correctionContext : undefined,
+    })
+  } catch (err) {
+    await supabase
+      .from('reports')
+      .update({ status: 'failed' })
+      .eq('id', currentReportId)
+      .eq('user_id', user.id)
+
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to generate section' },
+      { status: 500 }
+    )
+  }
 
   const updatedSections = {
     ...existingSections,
     [result.sectionId]: { title: result.title, content: result.content },
   }
-  await supabase.from('reports').update({ sections: updatedSections }).eq('id', currentReportId)
+  await supabase
+    .from('reports')
+    .update({ sections: updatedSections })
+    .eq('id', currentReportId)
+    .eq('user_id', user.id)
 
   return NextResponse.json({
     reportId: currentReportId, sectionId: result.sectionId,

@@ -1153,6 +1153,13 @@
   gap: 6px;
   align-items: center;
 }
+.tn-ws-error {
+  padding: 8px 24px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tn-crit) 25%, transparent);
+  background: color-mix(in srgb, var(--tn-crit) 8%, transparent);
+  color: var(--tn-crit);
+  font-size: 12px;
+}
 
 /* --- Paper scroll & container --- */
 .tn-paper-scroll {

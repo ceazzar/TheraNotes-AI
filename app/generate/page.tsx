@@ -54,12 +54,10 @@ export default function GeneratePage() {
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
-  const [currentSectionName, setCurrentSectionName] = useState('')
   const [completedCount, setCompletedCount] = useState(0)
   const [sections, setSections] = useState<Sections>({})
   const [reportId, setReportId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isCoherenceRunning, setIsCoherenceRunning] = useState(false)
   const [isDone, setIsDone] = useState(false)
 
   const reportRef = useRef<HTMLDivElement>(null)
@@ -99,14 +97,18 @@ export default function GeneratePage() {
         return
       }
 
+      const participant = participantName.trim() || 'Quick Generate'
       const { data: assessment, error: assessmentError } = await supabase
         .from('assessments')
         .insert({
           user_id: user.id,
-          participant_name: participantName || 'Quick Generate',
+          title: `${participant} FCA`,
+          participant_name: participant,
+          ndis_number: ndisNumber.trim() || null,
+          assessor_name: assessor.trim() || null,
           clinical_notes: clinicalNotes,
-          domains: {},
-          status: 'quick_generate',
+          functional_domains: {},
+          status: 'generating',
         })
         .select('id')
         .single()
@@ -122,7 +124,6 @@ export default function GeneratePage() {
 
       for (let i = 0; i < generatableSections.length; i++) {
         const section = generatableSections[i]
-        setCurrentSectionName(section.name)
 
         const response: Response = await fetch('/api/generate', {
           method: 'POST',
@@ -163,10 +164,7 @@ export default function GeneratePage() {
 
       // Run coherence check
       if (currentReportId) {
-        setIsCoherenceRunning(true)
-        setCurrentSectionName('Running coherence check...')
-
-        await fetch('/api/generate', {
+        const coherenceResponse = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -175,7 +173,17 @@ export default function GeneratePage() {
             clinicalNotes,
           }),
         })
+
+        if (!coherenceResponse.ok) {
+          const errData = await coherenceResponse.json().catch(() => ({}))
+          throw new Error(errData.error || 'Failed to run coherence check')
+        }
       }
+
+      await supabase
+        .from('assessments')
+        .update({ status: 'complete' })
+        .eq('id', assessment.id)
 
       setIsDone(true)
     } catch (err) {
@@ -184,10 +192,8 @@ export default function GeneratePage() {
       )
     } finally {
       setIsGenerating(false)
-      setIsCoherenceRunning(false)
-      setCurrentSectionName('')
     }
-  }, [clinicalNotes, supabase, participantName])
+  }, [assessor, clinicalNotes, ndisNumber, participantName, supabase])
 
   /** Send button click: show validation first, then generate */
   const handleGenerate = useCallback(() => {

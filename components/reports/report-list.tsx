@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ReportCard } from './report-card'
@@ -20,7 +20,7 @@ export function ReportList() {
   const [reports, setReports] = useState<ReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     async function load() {
@@ -35,7 +35,7 @@ export function ReportList() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [supabase])
 
   if (loading) {
     return (
@@ -63,7 +63,6 @@ export function ReportList() {
           {reports.map((r) => (
             <ReportCard
               key={r.id}
-              id={r.id}
               status={r.status}
               participantName={
                 Array.isArray(r.assessments)

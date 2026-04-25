@@ -11,7 +11,12 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { reportId, sectionId, feedback } = await request.json()
-  const { data: report } = await supabase.from('reports').select('sections').eq('id', reportId).single()
+  const { data: report } = await supabase
+    .from('reports')
+    .select('sections')
+    .eq('id', reportId)
+    .eq('user_id', user.id)
+    .single()
   if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
 
   const sections = report.sections as Record<string, { title: string; content: string }>
@@ -27,14 +32,22 @@ export async function POST(request: NextRequest) {
   })
 
   const updatedSections = { ...sections, [sectionId]: { title: targetSection.title, content: result.revisedContent } }
-  await supabase.from('reports').update({ sections: updatedSections }).eq('id', reportId)
+  await supabase
+    .from('reports')
+    .update({ sections: updatedSections })
+    .eq('id', reportId)
+    .eq('user_id', user.id)
 
   const coherenceResult = await runCoherenceCheck({
     fullReport: Object.entries(updatedSections as Record<string, { title: string; content: string }>)
       .map(([, s]) => `## ${s.title}\n\n${s.content}`).join('\n\n'),
     clinicalNotes: '',
   })
-  await supabase.from('reports').update({ coherence_result: coherenceResult }).eq('id', reportId)
+  await supabase
+    .from('reports')
+    .update({ coherence_result: coherenceResult })
+    .eq('id', reportId)
+    .eq('user_id', user.id)
 
   return NextResponse.json({ sectionId, revisedContent: result.revisedContent, coherenceResult })
 }

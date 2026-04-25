@@ -22,12 +22,22 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
 
-  const { messages, sessionId } = await request.json()
+  const { messages, sessionId, reportId, activeSectionId } = await request.json()
 
-  const { data: report } = await supabase
+  if (!reportId && !sessionId) {
+    return new Response('reportId or sessionId is required', { status: 400 })
+  }
+
+  let reportQuery = supabase
     .from('reports')
-    .select('id, sections, status')
-    .eq('session_id', sessionId)
+    .select('id, session_id, sections, status')
+    .eq('user_id', user.id)
+
+  reportQuery = reportId
+    ? reportQuery.eq('id', reportId)
+    : reportQuery.eq('session_id', sessionId)
+
+  const { data: report } = await reportQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -37,11 +47,17 @@ export async function POST(request: NextRequest) {
     .map((s: SectionTemplate) => `- ${s.name}`)
     .join('\n')
 
+  const sections = (report?.sections ?? {}) as Record<string, { title: string; content: string }>
+  const activeSection = activeSectionId ? sections[activeSectionId] : null
+  const activeSectionPrompt = activeSection
+    ? `\n\nFocused section: ${activeSection.title}\n\nCurrent focused section content:\n${activeSection.content}`
+    : ''
+
   const contextPrompt = `${SYSTEM_PROMPT}\n\nAvailable report sections:\n${sectionList}\n\n${
     report
-      ? `Current report status: ${report.status}. Sections completed: ${Object.keys(report.sections as object).length}/${template.sections.length}`
+      ? `Current report status: ${report.status}. Sections completed: ${Object.keys(sections).length}/${template.sections.length}`
       : 'No report started yet for this session.'
-  }\n\nWhen the user provides clinical notes and asks to generate a report, acknowledge their request and let them know the report is being generated. The system will handle the actual generation automatically.`
+  }${activeSectionPrompt}\n\nAnswer questions about the current report. If a clinician asks for changes, explain what should change and which section is affected; do not claim that the report was updated unless a revision endpoint has actually updated it.`
 
   const modelMessages = await convertToModelMessages(messages)
 
@@ -100,15 +116,20 @@ export async function POST(request: NextRequest) {
       if (text) {
         const cleanText = text.replace('[GENERATE_REPORT]\n', '').trim()
         if (cleanText) {
-          await supabase.from('messages').insert({
-            session_id: sessionId,
-            role: 'assistant',
-            content: cleanText,
-          })
+          const messageSessionId = report?.session_id ?? sessionId
+          if (messageSessionId) {
+            await supabase.from('messages').insert({
+              session_id: messageSessionId,
+              role: 'assistant',
+              content: cleanText,
+            })
+          }
         }
       }
     },
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse({
+    onError: () => 'Revision chat is unavailable.',
+  })
 }

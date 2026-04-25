@@ -23,7 +23,7 @@ AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "")
 
 def verify_key(authorization: str = Header(None)):
     if not AGENT_API_KEY:
-        return
+        raise HTTPException(status_code=503, detail="AGENT_API_KEY is not configured")
     token = (authorization or "").removeprefix("Bearer ").strip()
     if token != AGENT_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -31,10 +31,11 @@ def verify_key(authorization: str = Header(None)):
 
 class ReviewRequest(BaseModel):
     report_id: str
-    user_id: str | None = None
+    user_id: str
 
 class CompanionRequest(BaseModel):
     assessment_id: str
+    user_id: str
     trigger: str = "readiness_check"
 
 class RevisionRequest(BaseModel):
