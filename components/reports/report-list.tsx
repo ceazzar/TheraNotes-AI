@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ReportCard } from './report-card'
@@ -23,19 +24,57 @@ export function ReportList() {
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    async function load() {
-      const { data, error } = await supabase
-        .from('reports')
-        .select('id, status, sections, created_at, updated_at, assessment_id, planner_review, assessments(participant_name)')
-        .order('updated_at', { ascending: false })
+    let isActive = true
 
-      if (!error && data) {
-        setReports(data as unknown as ReportRow[])
-      }
-      setLoading(false)
+    void supabase
+      .from('reports')
+      .select('id, status, sections, created_at, updated_at, assessment_id, planner_review, assessments(participant_name)')
+      .order('updated_at', { ascending: false })
+      .then(async ({ data, error }) => {
+        if (!isActive) return
+
+        if (!error && data) {
+          const thirtyMinAgo = Date.now() - 30 * 60 * 1000
+          const staleIds: string[] = []
+
+          const cleaned = (data as unknown as ReportRow[]).map((report) => {
+            if (
+              report.status === 'generating' &&
+              new Date(report.updated_at).getTime() < thirtyMinAgo
+            ) {
+              staleIds.push(report.id)
+              return { ...report, status: 'failed' }
+            }
+
+            return report
+          })
+
+          if (staleIds.length > 0) {
+            await supabase
+              .from('reports')
+              .update({ status: 'failed' })
+              .in('id', staleIds)
+          }
+
+          if (!isActive) return
+          setReports(cleaned)
+        }
+
+        setLoading(false)
+      })
+
+    return () => {
+      isActive = false
     }
-    load()
   }, [supabase])
+
+  const handleDelete = useCallback(async (id: string) => {
+    const response = await fetch(`/api/reports/${id}`, { method: 'DELETE' })
+
+    if (response.ok) {
+      setReports((previous) => previous.filter((report) => report.id !== id))
+    }
+  }, [])
 
   if (loading) {
     return (
@@ -55,7 +94,10 @@ export function ReportList() {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
           <p className="text-sm text-muted-foreground text-center">
             No reports yet. Generate your first report from the{' '}
-            <a href="/generate" className="underline hover:text-foreground">Generate</a> page.
+            <Link href="/generate" className="underline hover:text-foreground">
+              Generate
+            </Link>{' '}
+            page.
           </p>
         </div>
       ) : (
@@ -73,6 +115,7 @@ export function ReportList() {
               flagCount={r.planner_review?.flags?.length ?? 0}
               updatedAt={r.updated_at}
               onClick={() => router.push(`/report/${r.id}`)}
+              onDelete={() => handleDelete(r.id)}
             />
           ))}
         </div>

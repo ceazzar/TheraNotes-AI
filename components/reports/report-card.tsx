@@ -1,9 +1,10 @@
 'use client'
 
+import { useEffect, useState, type MouseEvent } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { FileText } from 'lucide-react'
+import { FileText, Trash2 } from 'lucide-react'
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   draft: {
@@ -31,6 +32,7 @@ interface ReportCardProps {
   flagCount: number
   updatedAt: string
   onClick: () => void
+  onDelete: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -49,44 +51,78 @@ export function ReportCard({
   flagCount,
   updatedAt,
   onClick,
+  onDelete,
 }: ReportCardProps) {
   const config = statusConfig[status] ?? statusConfig.draft
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (!confirming) return
+
+    const timeout = window.setTimeout(() => setConfirming(false), 3000)
+    return () => window.clearTimeout(timeout)
+  }, [confirming])
+
+  const handleDeleteClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+
+    if (confirming) {
+      onDelete()
+      return
+    }
+
+    setConfirming(true)
+  }
 
   return (
-    <button
-      type="button"
-      className="w-full text-left"
-      onClick={onClick}
-    >
-      <Card
-        className={cn(
-          'transition-colors hover:border-primary/50',
-          'py-4'
-        )}
+    <div className="tn-report-card-wrap">
+      <button
+        type="button"
+        className="w-full text-left"
+        onClick={onClick}
       >
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <h3 className="font-medium text-sm leading-snug line-clamp-2">
-                {participantName
-                  ? `FCA — ${participantName}`
-                  : 'FCA Report'}
-              </h3>
+        <Card
+          className={cn(
+            'transition-colors hover:border-primary/50',
+            'py-4'
+          )}
+        >
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <h3 className="font-medium text-sm leading-snug line-clamp-2">
+                  {participantName
+                    ? `FCA — ${participantName}`
+                    : 'FCA Report'}
+                </h3>
+              </div>
+              <Badge variant="outline" className={cn('shrink-0', config.className)}>
+                {config.label}
+              </Badge>
             </div>
-            <Badge variant="outline" className={cn('shrink-0', config.className)}>
-              {config.label}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
-              {flagCount > 0 && ` · ${flagCount} flags`}
-            </span>
-            <span>{formatDate(updatedAt)}</span>
-          </div>
-        </CardContent>
-      </Card>
-    </button>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
+                {flagCount > 0 && ` · ${flagCount} flags`}
+              </span>
+              <span>{formatDate(updatedAt)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </button>
+      <button
+        type="button"
+        className={cn('tn-card-delete', confirming && 'tn-card-delete-confirm')}
+        onClick={handleDeleteClick}
+        aria-label={confirming ? 'Confirm delete report' : 'Delete report'}
+      >
+        {confirming ? (
+          <span className="text-xs">Delete?</span>
+        ) : (
+          <Trash2 size={13} />
+        )}
+      </button>
+    </div>
   )
 }

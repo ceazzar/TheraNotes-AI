@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import Link from 'next/link'
 import { ChevronLeft, Search, Shield } from 'lucide-react'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
@@ -57,6 +58,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   const [report, setReport] = useState<Report | null>(null)
   const [participant, setParticipant] = useState<Participant | null>(null)
   const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
   const [plateValue, setPlateValue] = useState<Value | null>(null)
   const [sectionKeys, setSectionKeys] = useState<string[]>([])
   const [tocSections, setTocSections] = useState<ReportSection[]>([])
@@ -81,6 +83,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         .single()
 
       if (!reportData) {
+        setNotFound(true)
         setLoading(false)
         return
       }
@@ -255,16 +258,55 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--tn-bg)' }}>
-        <p className="text-sm text-muted-foreground">Loading workspace...</p>
+      <div className="tn-ws animate-pulse">
+        <aside className="tn-side">
+          <div className="p-4 space-y-3">
+            {[68, 76, 84, 92, 100].map((width) => (
+              <div
+                key={width}
+                className="h-4 rounded bg-muted"
+                style={{ width: `${width}%` }}
+              />
+            ))}
+          </div>
+        </aside>
+        <main className="tn-ws-main">
+          <div className="tn-ws-topbar">
+            <div className="h-4 w-32 rounded bg-muted" />
+          </div>
+          <div className="flex-1 p-8">
+            <div className="mx-auto max-w-[820px] space-y-6">
+              <div className="h-6 w-64 rounded bg-muted" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="h-3 w-5/6 rounded bg-muted" />
+              </div>
+              <div className="h-6 w-48 rounded bg-muted mt-8" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="h-3 w-4/6 rounded bg-muted" />
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
 
-  if (!report || !plateValue) {
+  if (!report || !plateValue || notFound) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--tn-bg)' }}>
-        <p className="text-sm text-muted-foreground">Report not found.</p>
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-3"
+        style={{ background: 'var(--tn-bg)' }}
+      >
+        <p className="text-sm text-muted-foreground">
+          Report not found or you don&apos;t have access.
+        </p>
+        <Link href="/reports" className="tn-btn tn-btn-outline tn-btn-sm">
+          Back to Reports
+        </Link>
       </div>
     )
   }

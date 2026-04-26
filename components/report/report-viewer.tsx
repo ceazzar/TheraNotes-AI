@@ -45,6 +45,7 @@ interface ReportViewerProps {
 
 export function ReportViewer({ reportId }: ReportViewerProps) {
   const [report, setReport] = useState<Report | null>(null)
+  const [notFound, setNotFound] = useState(false)
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
@@ -79,9 +80,24 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
 
   useEffect(() => {
     let isActive = true
+    let failCount = 0
+
     const refresh = () => {
       void fetchReport().then((nextReport) => {
-        if (isActive && nextReport) setReport(nextReport)
+        if (!isActive) return
+
+        if (nextReport) {
+          setReport(nextReport)
+          setNotFound(false)
+          failCount = 0
+          return
+        }
+
+        failCount++
+        if (failCount >= 2) {
+          setReport(null)
+          setNotFound(true)
+        }
       })
     }
 
@@ -175,11 +191,33 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
 
         {/* Sections */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {!report && (
-            <div className="flex items-center justify-center h-full">
+          {notFound && (
+            <div className="flex h-full flex-col items-center justify-center gap-3">
               <p className="text-sm text-muted-foreground">
-                Loading report...
+                Report not found or you don&apos;t have access.
               </p>
+              <Link
+                href="/reports"
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+              >
+                <ArrowLeft className="size-3.5" />
+                Back to Reports
+              </Link>
+            </div>
+          )}
+
+          {!report && !notFound && (
+            <div className="space-y-8 py-4 animate-pulse">
+              {['overview', 'details', 'recommendations'].map((id) => (
+                <div key={id} className="space-y-3">
+                  <div className="h-5 w-48 rounded bg-muted" />
+                  <div className="space-y-2">
+                    <div className="h-3 w-full rounded bg-muted" />
+                    <div className="h-3 w-full rounded bg-muted" />
+                    <div className="h-3 w-3/4 rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -222,7 +260,9 @@ export function ReportViewer({ reportId }: ReportViewerProps) {
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-muted-foreground">
+              {notFound ? '' : 'Loading...'}
+            </p>
           </div>
         )}
       </div>

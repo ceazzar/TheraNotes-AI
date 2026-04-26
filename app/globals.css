@@ -252,6 +252,73 @@
   height: 28px;
   border-radius: 50%;
   background: linear-gradient(135deg, #d9d5cc, #bdb8ad);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  padding: 0;
+  transition: opacity 0.15s ease;
+}
+.tn-avatar:hover {
+  opacity: 0.8;
+}
+.tn-user-menu {
+  position: relative;
+}
+.tn-avatar-initials {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tn-ink);
+  letter-spacing: 0;
+}
+.tn-user-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--tn-bg-raised);
+  border: 1px solid var(--tn-line);
+  border-radius: var(--tn-radius);
+  box-shadow: var(--tn-shadow-float);
+  z-index: 50;
+  padding: 4px;
+}
+.tn-user-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--tn-muted-1);
+}
+.tn-user-dropdown-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tn-user-dropdown-divider {
+  height: 1px;
+  background: var(--tn-line-soft);
+  margin: 4px 0;
+}
+.tn-user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--tn-ink);
+  background: none;
+  border: none;
+  border-radius: calc(var(--tn-radius) - 2px);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+.tn-user-dropdown-item:hover {
+  background: var(--tn-chip);
 }
 
 /* --- Pill buttons (dark ink) --- */
@@ -446,6 +513,18 @@
 .tn-id-field:last-child {
   border-right: none;
 }
+@media (max-width: 600px) {
+  .tn-identity-row {
+    grid-template-columns: 1fr;
+  }
+  .tn-id-field {
+    border-right: none;
+    border-bottom: 1px solid var(--tn-line-soft);
+  }
+  .tn-id-field:last-child {
+    border-bottom: none;
+  }
+}
 .tn-id-label {
   font-size: 11px;
   letter-spacing: 0.06em;
@@ -590,6 +669,50 @@
 .tn-valid-actions {
   display: flex;
   gap: 8px;
+}
+
+/* --- Report card delete --- */
+.tn-report-card-wrap {
+  position: relative;
+}
+.tn-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--tn-muted-2);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+  z-index: 2;
+}
+.tn-report-card-wrap:hover .tn-card-delete,
+.tn-card-delete:focus-visible {
+  opacity: 1;
+}
+.tn-card-delete:hover {
+  background: var(--tn-crit-bg);
+  color: var(--tn-crit);
+}
+.tn-card-delete-confirm {
+  opacity: 1;
+  width: auto;
+  padding: 0 8px;
+  background: var(--tn-crit);
+  color: white;
+  font-weight: 500;
+}
+.tn-card-delete-confirm:hover {
+  background: var(--tn-crit);
+  color: white;
+  opacity: 0.9;
 }
 
 /* ==========================================================================
