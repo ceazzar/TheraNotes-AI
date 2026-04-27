@@ -156,11 +156,18 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
   const { markDirty, saveStatus } = useAutoSave({ save: saveToSupabase })
 
-  // Progress
-  const touchedSections = useMemo(
-    () => new Set(flags.filter((f) => f.resolved).map((f) => f.section)),
-    [flags]
-  )
+  // Progress: sections that have real content (not empty or all INSUFFICIENT DATA)
+  const touchedSections = useMemo(() => {
+    if (!report) return new Set<string>()
+    const touched = new Set<string>()
+    for (const key of sectionKeys) {
+      const sec = report.sections[key]
+      if (!sec?.content) continue
+      const stripped = sec.content.replace(/\[INSUFFICIENT DATA:[^\]]*\]/g, '').trim()
+      if (stripped.length > 0) touched.add(key)
+    }
+    return touched
+  }, [report, sectionKeys])
   const progressPct = tocSections.length
     ? Math.round((touchedSections.size / tocSections.length) * 100)
     : 0
