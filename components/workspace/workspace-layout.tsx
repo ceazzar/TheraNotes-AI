@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, Search, Shield } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
 import { createClient } from '@/lib/supabase/client'
@@ -72,6 +74,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   const editorRef = useRef<PlateEditorHandle>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
 
   // Fetch report data
   useEffect(() => {
@@ -336,14 +339,15 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         {/* Topbar breadcrumbs */}
         <div className="tn-ws-topbar">
           <div className="tn-ws-crumbs">
-            <button
-              className="tn-btn tn-btn-ghost tn-btn-xs"
+            <Button
+              variant="ghost"
+              size="xs"
               style={{ marginRight: 4 }}
-              onClick={() => window.history.back()}
+              onClick={() => router.push('/reports')}
             >
-              <ChevronLeft size={13} /> Back
-            </button>
-            <span>Reports</span>
+              <ChevronLeft size={13} /> Reports
+            </Button>
+            <Link href="/reports" style={{ color: 'inherit', textDecoration: 'none' }}>Reports</Link>
             <span style={{ color: 'var(--tn-muted-3)' }}>/</span>
             <b>FCA &mdash; {participant?.name ?? 'Report'}</b>
             <span
@@ -358,16 +362,17 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
             </span>
           </div>
           <div className="tn-ws-top-actions">
-            <button className="tn-btn tn-btn-ghost tn-btn-xs">
+            <Button variant="ghost" size="xs">
               <Search size={13} /> Find
-            </button>
-            <button
-              className="tn-btn tn-btn-ghost tn-btn-xs"
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={handleRunReview}
               disabled={isReviewing}
             >
               <Shield size={13} /> {isReviewing ? 'Reviewing...' : 'NDIS Review'}
-            </button>
+            </Button>
           </div>
         </div>
         {reviewError && (

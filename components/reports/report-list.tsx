@@ -114,7 +114,7 @@ export function ReportList() {
               sectionCount={r.sections ? Object.keys(r.sections).length : 0}
               flagCount={r.planner_review?.flags?.length ?? 0}
               updatedAt={r.updated_at}
-              onClick={() => router.push(`/report/${r.id}`)}
+              onClick={() => router.push(`/workspace/${r.id}`)}
               onDelete={() => handleDelete(r.id)}
             />
           ))}

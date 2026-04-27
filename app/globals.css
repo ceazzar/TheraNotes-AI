@@ -41,8 +41,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-paper: #F5F4F0;
-  --color-paper-warm: #FAF9F5;
+  --color-paper: #FFFFFF;
+  --color-paper-warm: #FFFFFF;
   --color-ink: #0F172A;
   --color-ink-soft: #1E293B;
   --color-ink-border: #334155;
@@ -63,7 +63,7 @@
    Shadcn CSS Variables (light)
    ========================================================================== */
 :root {
-  --background: #F6F5F2;
+  --background: #FFFFFF;
   --foreground: oklch(0.145 0.02 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0.02 260);
@@ -74,7 +74,7 @@
   --secondary: oklch(0.97 0.005 260);
   --secondary-foreground: oklch(0.205 0.02 260);
   --muted: oklch(0.97 0.005 260);
-  --muted-foreground: oklch(0.556 0.01 260);
+  --muted-foreground: oklch(0.45 0.01 260);
   --accent: oklch(0.97 0.005 260);
   --accent-foreground: oklch(0.205 0.02 260);
   --destructive: oklch(0.577 0.245 27.325);
@@ -123,20 +123,20 @@
    ========================================================================== */
 :root {
   /* Surfaces */
-  --tn-bg:        #F6F5F2;
+  --tn-bg:        #FFFFFF;
   --tn-bg-raised: #FFFFFF;
   /* Inks */
   --tn-ink:       #1C1B22;
   --tn-ink-soft:  #2d2c35;
-  --tn-ink-2:     #3a3945;
+  --tn-ink-2:     #27272A;
   /* Muted hierarchy */
-  --tn-muted-1:   #6b6a74;
-  --tn-muted-2:   #9a9a9f;
-  --tn-muted-3:   #C6C3CD;
+  --tn-muted-1:   #52525B;
+  --tn-muted-2:   #71717A;
+  --tn-muted-3:   #A1A1AA;
   /* Lines & chips */
-  --tn-line:      #E7E4DD;
-  --tn-line-soft: #EFECE6;
-  --tn-chip:      #EDEAE3;
+  --tn-line:      #E5E7EB;
+  --tn-line-soft: #F3F4F6;
+  --tn-chip:      #F3F4F6;
   /* Accent (blue) */
   --tn-accent:    hsl(225 65% 50%);
   --tn-accent-ink:#1d4ed8;
@@ -1375,7 +1375,7 @@
   text-align: left;
   font-weight: 600;
   padding: 8px 10px;
-  background: #f5f4f0;
+  background: #F9FAFB;
   border-bottom: 1px solid var(--tn-line);
   color: var(--tn-ink);
   font-size: 12.5px;
@@ -1386,12 +1386,12 @@
   color: var(--tn-ink-2);
 }
 .tn-doc tbody tr:nth-child(even) td {
-  background: #fafaf7;
+  background: #FAFAFA;
 }
 
 /* Participant summary block */
 .tn-doc .tn-doc-participant {
-  background: #faf9f5;
+  background: #F9FAFB;
   border: 1px solid var(--tn-line-soft);
   border-radius: 6px;
   padding: 18px 22px;

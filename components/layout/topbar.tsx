@@ -28,7 +28,7 @@ export function Topbar() {
           const isActive =
             pathname === item.href ||
             (item.href === '/generate' && pathname === '/') ||
-            (item.href === '/reports' && pathname.startsWith('/report'))
+            (item.href === '/reports' && (pathname.startsWith('/reports') || pathname.startsWith('/workspace')))
           return (
             <Link
               key={item.href}

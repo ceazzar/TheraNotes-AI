@@ -24,33 +24,24 @@ export async function queryRag(params: {
     userLimit = 3,
   } = params
 
-  let embedding: number[]
   try {
-    embedding = await embedText(queryText)
-  } catch {
-    return { foundational: [], userStyle: [] }
-  }
-  const supabase = await createServiceClient()
-  const embeddingStr = `[${embedding.join(',')}]`
+    const embedding = await embedText(queryText)
+    const supabase = await createServiceClient()
+    const embeddingStr = `[${embedding.join(',')}]`
 
-  const foundationalQuery = supabase.rpc('match_exemplar_chunks', {
-    query_embedding: embeddingStr,
-    match_count: foundationalLimit,
-    filter_user_id: null,
-    filter_section: sectionFilter ?? null,
-  })
-
-  const userQuery = supabase.rpc('match_exemplar_chunks', {
-    query_embedding: embeddingStr,
-    match_count: userLimit,
-    filter_user_id: userId,
-    filter_section: sectionFilter ?? null,
-  })
-
-  try {
     const [foundationalResult, userResult] = await Promise.all([
-      foundationalQuery,
-      userQuery,
+      supabase.rpc('match_exemplar_chunks', {
+        query_embedding: embeddingStr,
+        match_count: foundationalLimit,
+        filter_user_id: null,
+        filter_section: sectionFilter ?? null,
+      }),
+      supabase.rpc('match_exemplar_chunks', {
+        query_embedding: embeddingStr,
+        match_count: userLimit,
+        filter_user_id: userId,
+        filter_section: sectionFilter ?? null,
+      }),
     ])
 
     return {

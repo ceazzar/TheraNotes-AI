@@ -14,6 +14,9 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Topbar } from '@/components/layout/topbar'
 import { ProgressScreen } from '@/components/generate/progress-screen'
 import { FormattedReport } from '@/components/report/formatted-report'
@@ -279,11 +282,11 @@ export default function GeneratePage() {
               <div className="flex items-center gap-3">
                 {reportId && (
                   <Link
-                    href={`/report/${reportId}`}
+                    href={`/workspace/${reportId}`}
                     className="text-sm transition-colors"
                     style={{ color: 'var(--tn-muted-1)' }}
                   >
-                    Open in report viewer
+                    Open in workspace
                   </Link>
                 )}
                 <ExportButton sections={sections} />
@@ -309,13 +312,15 @@ export default function GeneratePage() {
               <strong>Tip</strong>&nbsp;&nbsp;Upload your previous FCA reports in
               Settings to personalise the AI&rsquo;s writing style.
             </span>
-            <button
-              className="tn-banner-close"
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ml-auto rounded-full"
               onClick={() => setShowBanner(false)}
               aria-label="Dismiss"
             >
               <X size={14} />
-            </button>
+            </Button>
           </div>
         )}
 
@@ -332,38 +337,38 @@ export default function GeneratePage() {
         <div className="tn-gen-card">
           {/* Identity row */}
           <div className="tn-identity-row">
-            <label className="tn-id-field">
+            <Label className="tn-id-field">
               <span className="tn-id-label">Participant name</span>
-              <input
-                className="tn-id-input"
+              <Input
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 pt-0.5 text-[14.5px]"
                 value={participantName}
                 onChange={(e) => setParticipantName(e.target.value)}
                 placeholder="e.g. Participant A"
               />
-            </label>
-            <label className="tn-id-field">
+            </Label>
+            <Label className="tn-id-field">
               <span className="tn-id-label">NDIS number</span>
-              <input
-                className="tn-id-input"
+              <Input
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 pt-0.5 text-[14.5px]"
                 value={ndisNumber}
                 onChange={(e) => setNdisNumber(e.target.value)}
                 placeholder="430 xxx xxx"
               />
-            </label>
-            <label className="tn-id-field">
+            </Label>
+            <Label className="tn-id-field">
               <span className="tn-id-label">Assessor</span>
-              <input
-                className="tn-id-input"
+              <Input
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 pt-0.5 text-[14.5px]"
                 value={assessor}
                 onChange={(e) => setAssessor(e.target.value)}
                 placeholder="Name, credentials"
               />
-            </label>
+            </Label>
           </div>
 
           {/* Textarea */}
-          <textarea
-            className="tn-notes-area"
+          <Textarea
+            className="border-0 bg-transparent shadow-none focus-visible:ring-0 resize-y min-h-[220px] px-[18px] pt-[18px] pb-2.5 text-[14.5px] leading-[1.65]"
             placeholder={placeholder}
             value={clinicalNotes}
             onChange={(e) => setClinicalNotes(e.target.value)}
@@ -372,35 +377,41 @@ export default function GeneratePage() {
           {/* Footer bar */}
           <div className="tn-gen-footer">
             <div className="tn-gen-tools">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 className="tn-tool-chip"
                 title="Attach transcripts or prior reports"
               >
                 <Paperclip size={14} /> Attach
-              </button>
-              <button className="tn-tool-chip" title="Dictate">
+              </Button>
+              <Button variant="ghost" size="sm" className="tn-tool-chip" title="Dictate">
                 <Mic size={14} /> Dictate
-              </button>
-              <button className="tn-tool-chip" title="Use a template">
+              </Button>
+              <Button variant="ghost" size="sm" className="tn-tool-chip" title="Use a template">
                 <FileText size={14} /> Template
-              </button>
+              </Button>
             </div>
-            <button
-              className="tn-send-btn"
+            <Button
+              variant="default"
+              size="icon"
+              className="rounded-full"
               onClick={handleGenerate}
               disabled={!clinicalNotes.trim()}
               aria-label="Generate report"
             >
               <ArrowUp size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Quick-add chips (hidden when validation shows) */}
         {!showValidation && (
           <div className="tn-gen-helpers">
-            <button
-              className="tn-chip"
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full h-7 text-xs"
               onClick={() =>
                 setClinicalNotes(
                   (n) =>
@@ -410,9 +421,11 @@ export default function GeneratePage() {
               }
             >
               + Sensory
-            </button>
-            <button
-              className="tn-chip"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full h-7 text-xs"
               onClick={() =>
                 setClinicalNotes(
                   (n) =>
@@ -422,9 +435,11 @@ export default function GeneratePage() {
               }
             >
               + Scores
-            </button>
-            <button
-              className="tn-chip"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full h-7 text-xs"
               onClick={() =>
                 setClinicalNotes(
                   (n) =>
@@ -434,9 +449,11 @@ export default function GeneratePage() {
               }
             >
               + Mental health
-            </button>
-            <button
-              className="tn-chip"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full h-7 text-xs"
               onClick={() =>
                 setClinicalNotes(
                   (n) =>
@@ -446,7 +463,7 @@ export default function GeneratePage() {
               }
             >
               + Goals
-            </button>
+            </Button>
           </div>
         )}
 
@@ -473,18 +490,20 @@ export default function GeneratePage() {
               </li>
             </ul>
             <div className="tn-valid-actions">
-              <button
-                className="tn-btn tn-btn-outline tn-btn-sm"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowValidation(false)}
               >
                 Add more notes
-              </button>
-              <button
-                className="tn-btn tn-btn-primary tn-btn-sm"
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
                 onClick={handleGenerateAnyway}
               >
                 Generate anyway
-              </button>
+              </Button>
             </div>
           </div>
         )}

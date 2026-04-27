@@ -3,6 +3,8 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export default function Error({
   error,
@@ -26,14 +28,13 @@ export default function Error({
         page if the problem persists.
       </p>
       <div className="mt-2 flex gap-3">
-        <button
-          type="button"
-          onClick={() => unstable_retry()}
-          className="tn-btn tn-btn-primary tn-btn-sm"
-        >
+        <Button variant="default" size="sm" onClick={() => unstable_retry()}>
           Try again
-        </button>
-        <Link href="/generate" className="tn-btn tn-btn-outline tn-btn-sm">
+        </Button>
+        <Link
+          href="/generate"
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+        >
           Back to Generate
         </Link>
       </div>

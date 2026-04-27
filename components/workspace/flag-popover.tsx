@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback } from "react";
 import { X, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Flag } from "@/lib/workspace/types";
 
 interface FlagPopoverProps {
@@ -89,18 +90,20 @@ export function FlagPopover({
       </div>
       <div className="tn-popover-rationale">{flag.rationale}</div>
       <div className="tn-popover-actions">
-        <button
-          className="tn-btn tn-btn-accent tn-btn-sm"
+        <Button
+          className="bg-[hsl(225,65%,50%)] hover:bg-[hsl(225,65%,45%)] text-white"
+          size="sm"
           onClick={() => onApply(flag)}
         >
           <Sparkles size={11} /> Apply fix
-        </button>
-        <button
-          className="tn-btn tn-btn-outline tn-btn-sm"
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => onDismiss(flag)}
         >
           Dismiss
-        </button>
+        </Button>
       </div>
     </div>
   );

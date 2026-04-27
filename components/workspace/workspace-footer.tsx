@@ -1,6 +1,7 @@
 'use client'
 
 import { Printer, Shield, Download } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface WorkspaceFooterProps {
   saving: boolean
@@ -22,25 +23,28 @@ export function WorkspaceFooter({
         {saving ? 'Saving…' : 'Saved just now'}
       </span>
       <div className="tn-footer-actions">
-        <button
-          className="tn-btn tn-btn-ghost tn-btn-sm"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => window.print()}
         >
           <Printer size={14} /> Print
-        </button>
-        <button
-          className="tn-btn tn-btn-outline tn-btn-sm"
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onRunReview}
           disabled={reviewing}
         >
           <Shield size={14} /> {reviewing ? 'Reviewing...' : 'Run NDIS review'}
-        </button>
-        <button
-          className="tn-btn tn-btn-primary tn-btn-sm"
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
           onClick={onExportDocx}
         >
           <Download size={14} /> Download DOCX
-        </button>
+        </Button>
       </div>
     </div>
   )

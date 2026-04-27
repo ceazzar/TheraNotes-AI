@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface RefinePanelProps {
   rect: DOMRect;
@@ -36,10 +37,10 @@ export function RefinePanel({
   return (
     <div className="tn-refine-panel tn-fade-up" style={{ top, left }}>
       <Sparkles size={13} className="flex-shrink-0" style={{ color: "var(--tn-accent)" }} />
-      <input
+      <Input
         ref={inputRef}
         className="tn-refine-input"
-        placeholder={`Improve this text — e.g. “add specific frequency”`}
+        placeholder='Improve this text -- e.g. "add specific frequency"'
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {

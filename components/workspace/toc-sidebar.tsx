@@ -1,6 +1,8 @@
 "use client";
 
 import { Sparkles, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import type { Flag, ReportSection } from "@/lib/workspace/types";
 
 interface TocSidebarProps {
@@ -52,12 +54,7 @@ export function TocSidebar({
               <span>Draft progress</span>
               <b>{progressPct}%</b>
             </div>
-            <div className="tn-side-progress-bar">
-              <div
-                className="tn-side-progress-fill"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
+            <Progress value={progressPct} className="h-[3px]" />
           </div>
 
           {/* Table of contents */}
@@ -174,13 +171,14 @@ function SidebarFlagSummary({
           </button>
         ))}
       </div>
-      <button
-        className="tn-btn tn-btn-outline tn-btn-sm"
+      <Button
+        variant="outline"
+        size="sm"
         style={{ width: "100%" }}
         onClick={onReviewAll}
       >
         Review all {live.length}
-      </button>
+      </Button>
     </div>
   );
 }

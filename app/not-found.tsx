@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export default function NotFound() {
   return (
@@ -9,7 +11,10 @@ export default function NotFound() {
       <p className="max-w-md text-center text-sm text-muted-foreground">
         The page you&apos;re looking for doesn&apos;t exist or has been moved.
       </p>
-      <Link href="/generate" className="tn-btn tn-btn-primary tn-btn-sm mt-2">
+      <Link
+        href="/generate"
+        className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'mt-2')}
+      >
         Back to Generate
       </Link>
     </div>

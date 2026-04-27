@@ -9,3 +9,8 @@
 - All cards/containers must use `Card` + `CardContent` from shadcn.
 - All status indicators must use `Badge` from shadcn.
 - All form layouts must use `Label` + the appropriate shadcn input component.
+
+## Test Credentials
+
+- **Email:** test@user.com
+- **Password:** test123
