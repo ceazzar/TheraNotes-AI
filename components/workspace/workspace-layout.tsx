@@ -14,6 +14,7 @@ import { useAutoSave } from '@/hooks/use-auto-save'
 import { PlateDocEditor, type PlateEditorHandle } from './plate-editor'
 import { TocSidebar } from './toc-sidebar'
 import { WorkspaceFooter } from './workspace-footer'
+import { AssessmentUpload } from './assessment-upload'
 import type { ReportSection, Flag, Participant } from '@/lib/workspace/types'
 import type { Value } from 'platejs'
 
@@ -387,6 +388,18 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
             {reviewError}
           </div>
         )}
+
+        {/* Assessment upload for Parts D & E */}
+        <AssessmentUpload
+          reportId={reportId}
+          hasSectionD={(() => {
+            const dKey = sectionKeys.find(k => report.sections[k]?.title?.includes('Part D'))
+            if (!dKey) return false
+            const content = report.sections[dKey]?.content ?? ''
+            return content.length > 0 && !content.includes('[INSUFFICIENT DATA: standardised assessment')
+          })()}
+          onGenerated={() => window.location.reload()}
+        />
 
         {/* Paper scroll area */}
         <div className="tn-paper-scroll" ref={scrollRef}>

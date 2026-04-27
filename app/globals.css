@@ -1284,6 +1284,52 @@
   font-size: 12px;
 }
 
+/* --- Assessment upload panel --- */
+.tn-assessment-upload {
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--tn-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tn-assessment-done {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--tn-ok) 6%, transparent);
+}
+.tn-assessment-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tn-assessment-header svg { margin-top: 1px; color: var(--tn-muted-2); }
+.tn-assessment-files {
+  padding-left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tn-assessment-actions {
+  padding-left: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tn-upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px dashed var(--tn-line);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--tn-muted-1);
+  transition: border-color 0.15s;
+}
+.tn-upload-label:hover { border-color: var(--tn-text); }
+
 /* --- Paper scroll & container --- */
 .tn-paper-scroll {
   flex: 1;

@@ -26,6 +26,7 @@ import templateData from '@/lib/template.json'
 type SectionTemplate = {
   name: string
   order: number
+  phase: string
   auto_generate?: boolean
 }
 
@@ -35,12 +36,26 @@ const generatableSections = (templateData.sections as SectionTemplate[])
   .filter((s) => !s.auto_generate)
   .sort((a, b) => a.order - b.order)
 
+const phase1Sections = generatableSections.filter((s) => s.phase === 'initial')
+
 // Map template sections to progress display items
-const progressSections = generatableSections.map((s, i) => ({
-  id: s.name,
-  title: s.name,
-  duration: 3000 + i * 500,
-}))
+const progressSections = [
+  ...phase1Sections.map((s, i) => ({
+    id: s.name,
+    title: s.name,
+    duration: 3000 + i * 500,
+  })),
+  {
+    id: 'Part D: Assessment Findings',
+    title: 'Part D: Assessment Findings — awaiting scores',
+    duration: 0,
+  },
+  {
+    id: 'Part E: Summary & Recommendations',
+    title: 'Part E: Summary & Recommendations — after Part D',
+    duration: 0,
+  },
+]
 
 export default function GeneratePage() {
   // Identity fields
@@ -125,8 +140,8 @@ export default function GeneratePage() {
       let currentReportId: string | null = null
       const accumulatedSections: Sections = {}
 
-      for (let i = 0; i < generatableSections.length; i++) {
-        const section = generatableSections[i]
+      for (let i = 0; i < phase1Sections.length; i++) {
+        const section = phase1Sections[i]
 
         const response: Response = await fetch('/api/generate', {
           method: 'POST',
@@ -165,27 +180,18 @@ export default function GeneratePage() {
         }
       }
 
-      // Run coherence check
+      // Skip coherence check — Parts D & E not yet generated
+      // Mark report as ready for assessment data
       if (currentReportId) {
-        const coherenceResponse = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'coherence_check',
-            reportId: currentReportId,
-            clinicalNotes,
-          }),
-        })
-
-        if (!coherenceResponse.ok) {
-          const errData = await coherenceResponse.json().catch(() => ({}))
-          throw new Error(errData.error || 'Failed to run coherence check')
-        }
+        await supabase
+          .from('reports')
+          .update({ status: 'ready' })
+          .eq('id', currentReportId)
       }
 
       await supabase
         .from('assessments')
-        .update({ status: 'complete' })
+        .update({ status: 'ready' })
         .eq('id', assessment.id)
 
       setIsDone(true)
