@@ -12,14 +12,10 @@ import {
 export const editorPlugins = [
   ...BasicNodesKit,
   ListPlugin,
-  TablePlugin.configure({
-    node: { component: SimpleTableElement },
-    plugins: {
-      [TableRowPlugin.key]: { node: { component: SimpleTableRowElement } },
-      [TableCellPlugin.key]: { node: { component: SimpleTableCellElement } },
-      [TableCellHeaderPlugin.key]: { node: { component: SimpleTableCellElement } },
-    },
-  }),
+  TablePlugin.configure({ node: { component: SimpleTableElement } }),
+  TableRowPlugin.configure({ node: { component: SimpleTableRowElement } }),
+  TableCellPlugin.configure({ node: { component: SimpleTableCellElement } }),
+  TableCellHeaderPlugin.configure({ node: { component: SimpleTableCellElement } }),
   BlockSelectionPlugin,
   MarkdownPlugin,
 ]
