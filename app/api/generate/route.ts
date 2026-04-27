@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       .map(([, s]) => `## ${s.title}\n\n${s.content}`).join('\n\n')
 
     try {
-      const coherenceResult = await runCoherenceCheck({ fullReport, clinicalNotes: body.clinicalNotes ?? '' })
+      const coherenceResult = await runCoherenceCheck({ fullReport, clinicalNotes: body.clinicalNotes ?? '', userId: user.id, reportId: body.reportId })
       await supabase
         .from('reports')
         .update({ coherence_result: coherenceResult, status: 'ready' })
@@ -161,6 +161,8 @@ export async function POST(request: NextRequest) {
       sectionId,
       ...(assessment ? { assessment } : { clinicalNotes: (clinicalNotes ?? '') + correctionContext }),
       userId: user.id,
+      reportId: currentReportId,
+      assessmentId: assessmentId ?? undefined,
       previousSections,
       questionnaireData,
       correctionContext: assessment ? correctionContext : undefined,

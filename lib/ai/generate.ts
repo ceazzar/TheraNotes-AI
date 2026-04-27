@@ -6,6 +6,7 @@ import {
   buildCoherencePrompt,
 } from '@/lib/ai/prompts'
 import { getDomainDataForSection, type Assessment } from '@/lib/ai/domain-mapper'
+import { logGeneration } from '@/lib/ai/log'
 import template from '@/lib/template.json'
 
 export type { Assessment } from '@/lib/ai/domain-mapper'
@@ -33,6 +34,8 @@ export interface GenerateSectionParams {
   /** Structured assessment object — when provided, domain data is extracted automatically. */
   assessment?: Assessment
   userId: string
+  reportId?: string
+  assessmentId?: string
   previousSections: Record<string, string>
   questionnaireData?: string
   /** Past correction patterns to include in the prompt context for the assessment path. */
@@ -111,22 +114,79 @@ export async function generateSection(
     )
   }
 
-  const response = await getOpenAI().chat.completions.create({
-    model: process.env.GENERATION_MODEL || 'gpt-4o',
-    messages: [
-      { role: 'system', content: prompt.system },
-      { role: 'user', content: prompt.user },
-    ],
-    temperature: 0.3,
-  })
+  const model = process.env.GENERATION_MODEL || 'gpt-4o'
+  const temperature = 0.3
+  const startTime = Date.now()
 
+  let response: OpenAI.Chat.Completions.ChatCompletion
+  try {
+    response = await getOpenAI().chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: prompt.user },
+      ],
+      temperature,
+    })
+  } catch (err) {
+    await logGeneration({
+      userId,
+      reportId: params.reportId,
+      assessmentId: params.assessmentId,
+      sectionId: sectionTemplate.name,
+      operation: 'generate',
+      systemPrompt: prompt.system,
+      userPrompt: prompt.user,
+      clinicalNotes: clinicalNotes.slice(0, 2000),
+      ragChunks: ragResults.foundational.concat(ragResults.userStyle).map(c => ({
+        content: c.content.slice(0, 500),
+        score: c.similarity,
+        source: c.sourceFile ?? undefined,
+      })),
+      model,
+      temperature,
+      status: 'error',
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - startTime,
+    })
+    throw err
+  }
+
+  const latencyMs = Date.now() - startTime
   const content = response.choices[0].message.content ?? ''
   const insufficientData = content.includes('[INSUFFICIENT DATA')
+  const processedContent = stripDuplicateHeading(content, sectionTemplate.name)
+
+  await logGeneration({
+    userId,
+    reportId: params.reportId,
+    assessmentId: params.assessmentId,
+    sectionId: sectionTemplate.name,
+    operation: 'generate',
+    systemPrompt: prompt.system,
+    userPrompt: prompt.user,
+    clinicalNotes: clinicalNotes.slice(0, 2000),
+    ragChunks: ragResults.foundational.concat(ragResults.userStyle).map(c => ({
+      content: c.content.slice(0, 500),
+      score: c.similarity,
+      source: c.sourceFile ?? undefined,
+    })),
+    model,
+    temperature,
+    rawOutput: content,
+    processedOutput: processedContent,
+    insufficientData,
+    promptTokens: response.usage?.prompt_tokens,
+    completionTokens: response.usage?.completion_tokens,
+    totalTokens: response.usage?.total_tokens,
+    latencyMs,
+    status: 'success',
+  })
 
   return {
     sectionId: sectionTemplate.name,
     title: sectionTemplate.name,
-    content: stripDuplicateHeading(content, sectionTemplate.name),
+    content: processedContent,
     insufficientData,
   }
 }
@@ -134,11 +194,15 @@ export async function generateSection(
 export async function runCoherenceCheck(params: {
   fullReport: string
   clinicalNotes: string
+  userId?: string
+  reportId?: string
 }): Promise<string> {
   const prompt = buildCoherencePrompt(params.fullReport)
+  const model = process.env.GENERATION_MODEL || 'gpt-4o'
+  const startTime = Date.now()
 
   const response = await getOpenAI().chat.completions.create({
-    model: process.env.GENERATION_MODEL || 'gpt-4o',
+    model,
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
@@ -146,7 +210,29 @@ export async function runCoherenceCheck(params: {
     temperature: 0,
   })
 
-  return response.choices[0].message.content ?? ''
+  const content = response.choices[0].message.content ?? ''
+
+  if (params.userId) {
+    await logGeneration({
+      userId: params.userId,
+      reportId: params.reportId,
+      sectionId: 'coherence_check',
+      operation: 'coherence',
+      systemPrompt: prompt.system,
+      userPrompt: prompt.user,
+      model,
+      temperature: 0,
+      rawOutput: content,
+      processedOutput: content,
+      promptTokens: response.usage?.prompt_tokens,
+      completionTokens: response.usage?.completion_tokens,
+      totalTokens: response.usage?.total_tokens,
+      latencyMs: Date.now() - startTime,
+      status: 'success',
+    })
+  }
+
+  return content
 }
 
 function stripDuplicateHeading(content: string, sectionName: string): string {

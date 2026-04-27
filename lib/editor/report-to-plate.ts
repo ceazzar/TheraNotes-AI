@@ -19,6 +19,86 @@ function createDeserializer() {
   })
 }
 
+function parseMarkdownTable(tableBlock: string): Descendant | null {
+  const lines = tableBlock.trim().split('\n').filter((l) => l.trim())
+  if (lines.length < 2) return null
+
+  const parseRow = (line: string): string[] =>
+    line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim())
+
+  const isSeparator = (line: string): boolean =>
+    /^\|?[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|?$/.test(line.trim())
+
+  const rows: string[][] = []
+  for (const line of lines) {
+    if (isSeparator(line)) continue
+    rows.push(parseRow(line))
+  }
+
+  if (rows.length === 0) return null
+
+  return {
+    type: 'table',
+    children: rows.map((cells) => ({
+      type: 'tr',
+      children: cells.map((text) => ({
+        type: 'td',
+        children: [{ type: 'p', children: [{ text: text.replace(/\*\*/g, '') }] }],
+      })),
+    })),
+  } as Descendant
+}
+
+function splitContentAndTables(content: string): { type: 'md' | 'table'; text: string }[] {
+  const lines = content.split('\n')
+  const blocks: { type: 'md' | 'table'; text: string }[] = []
+  let currentMd: string[] = []
+  let currentTable: string[] = []
+  let inTable = false
+
+  const flushMd = () => {
+    if (currentMd.length > 0) {
+      blocks.push({ type: 'md', text: currentMd.join('\n') })
+      currentMd = []
+    }
+  }
+
+  const flushTable = () => {
+    if (currentTable.length >= 2) {
+      blocks.push({ type: 'table', text: currentTable.join('\n') })
+    } else if (currentTable.length > 0) {
+      currentMd.push(...currentTable)
+    }
+    currentTable = []
+  }
+
+  for (const line of lines) {
+    const isTableLine = /^\s*\|/.test(line)
+    if (isTableLine) {
+      if (!inTable) {
+        flushMd()
+        inTable = true
+      }
+      currentTable.push(line)
+    } else {
+      if (inTable) {
+        flushTable()
+        inTable = false
+      }
+      currentMd.push(line)
+    }
+  }
+
+  if (inTable) flushTable()
+  flushMd()
+
+  return blocks
+}
+
 export function reportToPlate(sections: Sections): {
   value: Value
   sectionKeys: string[]
@@ -42,8 +122,22 @@ export function reportToPlate(sections: Sections): {
     } as Descendant)
 
     if (section?.content) {
-      const deserialized = tempEditor.api.markdown.deserialize(section.content)
-      nodes.push(...deserialized)
+      const blocks = splitContentAndTables(section.content)
+
+      for (const block of blocks) {
+        if (block.type === 'table') {
+          const tableNode = parseMarkdownTable(block.text)
+          if (tableNode) {
+            nodes.push(tableNode)
+          } else {
+            const fallback = tempEditor.api.markdown.deserialize(block.text)
+            nodes.push(...fallback)
+          }
+        } else if (block.text.trim()) {
+          const deserialized = tempEditor.api.markdown.deserialize(block.text)
+          nodes.push(...deserialized)
+        }
+      }
     } else {
       nodes.push({
         type: 'p',
