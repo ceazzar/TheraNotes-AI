@@ -37,7 +37,7 @@ Guidelines:
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
     onFinish: async ({ text, usage }) => {
-      const u = usage as Record<string, number> | undefined
+      const u = usage as unknown as Record<string, number> | undefined
       await logGeneration({
         userId: user.id,
         reportId: reportId || undefined,
