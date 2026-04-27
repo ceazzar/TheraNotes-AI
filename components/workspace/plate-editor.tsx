@@ -3,12 +3,12 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import {
   Plate,
-  PlateContent,
   usePlateEditor,
   type PlateEditor as PlateEditorType,
 } from 'platejs/react'
 import type { Value } from 'platejs'
 import { editorPlugins } from '@/lib/editor/plugins'
+import { Editor, EditorContainer } from '@/components/ui/editor'
 import { EditorToolbar } from './editor-toolbar'
 
 interface PlateEditorProps {
@@ -41,11 +41,13 @@ export const PlateDocEditor = forwardRef<PlateEditorHandle, PlateEditorProps>(
       <div className="tn-doc">
         <Plate editor={editor} onChange={handleChange}>
           <EditorToolbar />
-          <PlateContent
-            readOnly={readOnly}
-            className="tn-plate-editor outline-none min-h-[600px]"
-            style={{ whiteSpace: 'pre-wrap' }}
-          />
+          <EditorContainer>
+            <Editor
+              readOnly={readOnly}
+              variant="fullWidth"
+              className="tn-plate-editor"
+            />
+          </EditorContainer>
         </Plate>
       </div>
     )
