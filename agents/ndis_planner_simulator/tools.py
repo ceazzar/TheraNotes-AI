@@ -8,7 +8,7 @@ These are for future local testing — the web route uses direct Supabase querie
 import json
 from agents import function_tool
 
-from agents.shared.db import get_supabase
+from shared.db import get_supabase
 
 
 @function_tool

@@ -9,9 +9,9 @@ import logging
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
-from agents.ndis_planner_simulator.agent import run_planner_review
-from agents.assessment_companion.agent import run_companion_check
-from agents.revision_agent.agent import run_revision
+from ndis_planner_simulator.agent import run_planner_review
+from assessment_companion.agent import run_companion_check
+from revision_agent.agent import run_revision
 
 logging.basicConfig(level=logging.INFO, format='{"time":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}')
 logger = logging.getLogger("theranotes-agents")

@@ -12,7 +12,7 @@ import os
 import json
 from agents import Agent, Runner
 
-from agents.ndis_planner_simulator.tools import (
+from ndis_planner_simulator.tools import (
     get_report_sections,
     get_assessment_data,
     lookup_ndis_support_category,

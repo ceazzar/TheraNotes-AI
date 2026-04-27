@@ -12,7 +12,7 @@ import os
 import json
 from agents import Agent, Runner
 
-from agents.assessment_companion.tools import (
+from assessment_companion.tools import (
     get_assessment_data,
     get_clinician_profile,
     check_domain_completeness,

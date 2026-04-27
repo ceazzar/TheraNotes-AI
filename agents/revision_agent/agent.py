@@ -13,7 +13,7 @@ import os
 import json
 from agents import Agent, Runner, function_tool
 
-from agents.shared.db import get_supabase
+from shared.db import get_supabase
 
 
 # ---------------------------------------------------------------------------
