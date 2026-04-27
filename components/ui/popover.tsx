@@ -13,27 +13,18 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
-function PopoverAnchor({ ...props }: PopoverPrimitive.Anchor.Props) {
-  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
-}
-
 function PopoverContent({
   className,
   align = "center",
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
-  onEscapeKeyDown: _onEscape,
-  style,
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
-  > & {
-    onEscapeKeyDown?: (e: KeyboardEvent) => void
-    style?: React.CSSProperties
-  }) {
+  >) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -91,7 +82,6 @@ function PopoverDescription({
 
 export {
   Popover,
-  PopoverAnchor,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
