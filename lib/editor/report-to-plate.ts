@@ -47,7 +47,7 @@ function parseMarkdownTable(tableBlock: string): Descendant | null {
       type: 'tr',
       children: cells.map((text) => ({
         type: 'td',
-        children: [{ type: 'p', children: [{ text: text.replace(/\*\*/g, '').replace(/\\(?=[\[\]])/g, '') }] }],
+        children: [{ type: 'p', children: [{ text: text.replace(/\*\*/g, '').replace(/\\+(?=[\[\]])/g, '') }] }],
       })),
     })),
   } as Descendant
@@ -134,7 +134,7 @@ export function reportToPlate(sections: Sections): {
             nodes.push(...fallback)
           }
         } else if (block.text.trim()) {
-          const cleaned = block.text.replace(/\\(?=[\[\]])/g, '')
+          const cleaned = block.text.replace(/\\+(?=[\[\]])/g, '')
           const deserialized = tempEditor.api.markdown.deserialize(cleaned)
             .filter((node: Descendant & { type?: string }) => {
               if (node.type === 'code_block') {

@@ -1361,9 +1361,18 @@
   overflow: hidden;
 }
 
-/* --- Plate fixed toolbar: full-width inside paper --- */
+/* --- Plate fixed toolbar: scroll affordance --- */
 .tn-paper-inner [role="toolbar"]:first-child {
   border-radius: 4px 4px 0 0;
+  mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+}
+.tn-paper-inner [role="toolbar"]:first-child:not(:hover) {
+  scrollbar-width: none;
+}
+.tn-paper-inner [role="toolbar"]:first-child:hover {
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 /* --- Document typography (serif body, sans headings) --- */
