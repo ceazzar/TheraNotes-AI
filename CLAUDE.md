@@ -14,3 +14,11 @@
 
 - **Email:** test@user.com
 - **Password:** test123
+
+## Generation Logging
+
+All LLM calls are logged to the `generation_logs` table via `lib/ai/log.ts`. Every generation, revision, coherence check, and inline refinement captures: full prompts, RAG chunks retrieved, model config, token usage, latency, and raw/processed output. Logging is fire-and-forget — it never breaks the user-facing flow on failure. When debugging a bad section output, query `generation_logs` filtered by `report_id` and `section_id`.
+
+## Database Migrations
+
+Migrations must be numbered sequentially: `001_initial_schema.sql` through `006_generation_logs.sql`. Always apply new migrations to the Supabase project before deploying code that depends on them.
