@@ -6,6 +6,7 @@ import {
   type FloatingToolbarState,
   flip,
   offset,
+  shift,
   useFloatingToolbar,
   useFloatingToolbarState,
 } from '@platejs/floating';
@@ -42,6 +43,7 @@ export function FloatingToolbar({
     floatingOptions: {
       middleware: [
         offset(12),
+        shift({ padding: 12 }),
         flip({
           fallbackPlacements: [
             'top-start',

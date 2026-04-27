@@ -1353,11 +1353,17 @@
 }
 .tn-paper-inner {
   background: #fff;
-  padding: 64px 80px 96px;
+  padding: 0 0 96px;
   border-radius: 4px;
   border: 1px solid var(--tn-line-soft);
   box-shadow: var(--tn-shadow-paper);
   position: relative;
+  overflow: hidden;
+}
+
+/* --- Plate fixed toolbar: full-width inside paper --- */
+.tn-paper-inner [role="toolbar"]:first-child {
+  border-radius: 4px 4px 0 0;
 }
 
 /* --- Document typography (serif body, sans headings) --- */
@@ -1366,6 +1372,21 @@
   color: #1b1a20;
   font-size: 15px;
   line-height: 1.8;
+}
+.tn-doc [data-slate-editor] {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  color: #1b1a20;
+  font-size: 15px;
+  line-height: 1.8;
+  padding: 48px 80px 72px;
+}
+.tn-doc [data-slate-editor] h1,
+.tn-doc [data-slate-editor] h2,
+.tn-doc [data-slate-editor] h3,
+.tn-doc [data-slate-editor] h4,
+.tn-doc [data-slate-editor] h5,
+.tn-doc [data-slate-editor] h6 {
+  font-family: var(--font-sans);
 }
 .tn-doc h1 {
   font-family: var(--font-sans);
