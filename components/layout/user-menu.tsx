@@ -35,10 +35,10 @@ export function UserMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon" aria-label="User menu" />}
-      >
-        <span className="tn-avatar-initials">{initials}</span>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="User menu">
+          <span className="tn-avatar-initials">{initials}</span>
+        </Button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" sideOffset={8}>
