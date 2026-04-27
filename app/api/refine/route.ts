@@ -37,6 +37,7 @@ Guidelines:
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
     onFinish: async ({ text, usage }) => {
+      const u = usage as Record<string, number> | undefined
       await logGeneration({
         userId: user.id,
         reportId: reportId || undefined,
@@ -47,9 +48,9 @@ Guidelines:
         model: 'gpt-4o',
         rawOutput: text,
         processedOutput: text,
-        promptTokens: usage?.promptTokens,
-        completionTokens: usage?.completionTokens,
-        totalTokens: usage?.totalTokens,
+        promptTokens: u?.promptTokens ?? u?.prompt_tokens,
+        completionTokens: u?.completionTokens ?? u?.completion_tokens,
+        totalTokens: u?.totalTokens ?? u?.total_tokens,
         latencyMs: Date.now() - startTime,
         status: 'success',
       })
