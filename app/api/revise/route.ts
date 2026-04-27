@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   const result = await reviseSection({
     sectionId, sectionName: targetSection.title, currentContent: targetSection.content,
-    feedback, fullReportContext, userId: user.id, clinicalNotes: '',
+    feedback, fullReportContext, userId: user.id, reportId, clinicalNotes: '',
   })
 
   const updatedSections = { ...sections, [sectionId]: { title: targetSection.title, content: result.revisedContent } }
@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
     fullReport: Object.entries(updatedSections as Record<string, { title: string; content: string }>)
       .map(([, s]) => `## ${s.title}\n\n${s.content}`).join('\n\n'),
     clinicalNotes: '',
+    userId: user.id,
+    reportId,
   })
   await supabase
     .from('reports')

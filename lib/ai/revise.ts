@@ -4,6 +4,7 @@ import {
   buildRevisionRoutingPrompt,
   buildSectionRevisionPrompt,
 } from '@/lib/ai/prompts'
+import { logGeneration } from '@/lib/ai/log'
 import template from '@/lib/template.json'
 
 let _openai: OpenAI | null = null
@@ -51,6 +52,7 @@ export interface ReviseSectionParams {
   feedback: string
   fullReportContext: string
   userId: string
+  reportId?: string
   clinicalNotes: string
 }
 
@@ -96,8 +98,11 @@ export async function reviseSection(
     feedback,
   )
 
+  const model = process.env.GENERATION_MODEL || 'gpt-4o'
+  const startTime = Date.now()
+
   const response = await getOpenAI().chat.completions.create({
-    model: process.env.GENERATION_MODEL || 'gpt-4o',
+    model,
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
@@ -105,8 +110,34 @@ export async function reviseSection(
     temperature: 0.3,
   })
 
+  const revisedContent = response.choices[0].message.content ?? ''
+
+  await logGeneration({
+    userId,
+    reportId: params.reportId,
+    sectionId: sectionName,
+    operation: 'revise',
+    systemPrompt: prompt.system,
+    userPrompt: prompt.user,
+    clinicalNotes: clinicalNotes.slice(0, 2000),
+    ragChunks: ragResults.foundational.concat(ragResults.userStyle).map(c => ({
+      content: c.content.slice(0, 500),
+      score: c.similarity,
+      source: c.sourceFile ?? undefined,
+    })),
+    model,
+    temperature: 0.3,
+    rawOutput: revisedContent,
+    processedOutput: revisedContent,
+    promptTokens: response.usage?.prompt_tokens,
+    completionTokens: response.usage?.completion_tokens,
+    totalTokens: response.usage?.total_tokens,
+    latencyMs: Date.now() - startTime,
+    status: 'success',
+  })
+
   return {
     sectionId,
-    revisedContent: response.choices[0].message.content ?? '',
+    revisedContent,
   }
 }
