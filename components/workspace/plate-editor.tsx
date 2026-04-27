@@ -7,9 +7,8 @@ import {
   type PlateEditor as PlateEditorType,
 } from 'platejs/react'
 import type { Value } from 'platejs'
-import { editorPlugins } from '@/lib/editor/plugins'
+import { EditorKit } from '@/components/editor/editor-kit'
 import { Editor, EditorContainer } from '@/components/ui/editor'
-import { EditorToolbar } from './editor-toolbar'
 
 interface PlateEditorProps {
   initialValue: Value
@@ -27,7 +26,7 @@ export const PlateDocEditor = forwardRef<PlateEditorHandle, PlateEditorProps>(
     onChangeRef.current = onChange
 
     const editor = usePlateEditor({
-      plugins: editorPlugins,
+      plugins: EditorKit,
       value: initialValue,
     })
 
@@ -40,7 +39,6 @@ export const PlateDocEditor = forwardRef<PlateEditorHandle, PlateEditorProps>(
     return (
       <div className="tn-doc">
         <Plate editor={editor} onChange={handleChange}>
-          <EditorToolbar />
           <EditorContainer>
             <Editor
               readOnly={readOnly}
