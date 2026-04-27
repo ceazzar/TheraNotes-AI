@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { Button } from '@/components/ui/button'
 import { ReportCard } from './report-card'
 
 interface ReportRow {
@@ -26,7 +27,7 @@ export function ReportList() {
   useEffect(() => {
     let isActive = true
 
-    void supabase
+    supabase
       .from('reports')
       .select('id, status, sections, created_at, updated_at, assessment_id, planner_review, assessments(participant_name)')
       .order('updated_at', { ascending: false })
@@ -62,6 +63,9 @@ export function ReportList() {
 
         setLoading(false)
       })
+      .catch(() => {
+        if (isActive) setLoading(false)
+      })
 
     return () => {
       isActive = false
@@ -76,6 +80,24 @@ export function ReportList() {
     }
   }, [])
 
+  const failedEmptyCount = reports.filter(
+    (r) => r.status === 'failed' && (!r.sections || Object.keys(r.sections).length === 0)
+  ).length
+
+  const handleClearFailed = useCallback(async () => {
+    const toDelete = reports.filter(
+      (r) => r.status === 'failed' && (!r.sections || Object.keys(r.sections).length === 0)
+    )
+    await Promise.all(
+      toDelete.map((r) => fetch(`/api/reports/${r.id}`, { method: 'DELETE' }))
+    )
+    setReports((prev) =>
+      prev.filter(
+        (r) => !(r.status === 'failed' && (!r.sections || Object.keys(r.sections).length === 0))
+      )
+    )
+  }, [reports])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -88,6 +110,16 @@ export function ReportList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Your Reports</h2>
+        {failedEmptyCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            onClick={handleClearFailed}
+          >
+            Clear {failedEmptyCount} failed
+          </Button>
+        )}
       </div>
 
       {reports.length === 0 ? (
