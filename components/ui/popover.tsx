@@ -13,6 +13,10 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
+function PopoverAnchor({ ...props }: PopoverPrimitive.Anchor.Props) {
+  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
+}
+
 function PopoverContent({
   className,
   align = "center",
@@ -82,6 +86,7 @@ function PopoverDescription({
 
 export {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
