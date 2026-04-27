@@ -27,10 +27,10 @@ export function ReportList() {
   useEffect(() => {
     let isActive = true
 
-    supabase
+    Promise.resolve(supabase
       .from('reports')
       .select('id, status, sections, created_at, updated_at, assessment_id, planner_review, assessments(participant_name)')
-      .order('updated_at', { ascending: false })
+      .order('updated_at', { ascending: false }))
       .then(async ({ data, error }) => {
         if (!isActive) return
 
