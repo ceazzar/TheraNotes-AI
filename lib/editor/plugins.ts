@@ -29,11 +29,10 @@ import { H1Element, H2Element, H3Element, H4Element, H5Element, H6Element } from
 import { BlockquoteElement } from '@/components/ui/blockquote-node'
 import { HrElement } from '@/components/ui/hr-node'
 import {
-  TableElement,
-  TableRowElement,
-  TableCellElement,
-  TableCellHeaderElement,
-} from '@/components/ui/table-node'
+  SimpleTableElement,
+  SimpleTableRowElement,
+  SimpleTableCellElement,
+} from '@/components/ui/table-node-simple'
 import { BlockList } from '@/components/ui/block-list'
 
 import { ParagraphPlugin } from 'platejs/react'
@@ -59,16 +58,16 @@ export const editorPlugins = [
       belowNodes: BlockList,
     },
   }),
-  TablePlugin.withComponent(TableElement).configure({
+  TablePlugin.withComponent(SimpleTableElement).configure({
     plugins: {
       [TableRowPlugin.key]: {
-        render: { node: TableRowElement },
+        render: { node: SimpleTableRowElement },
       },
       [TableCellPlugin.key]: {
-        render: { node: TableCellElement },
+        render: { node: SimpleTableCellElement },
       },
       [TableCellHeaderPlugin.key]: {
-        render: { node: TableCellHeaderElement },
+        render: { node: SimpleTableCellElement },
       },
     },
   }),
