@@ -315,7 +315,7 @@ function withTooltip<T extends React.ElementType>(Component: T) {
     if (tooltip && mounted) {
       return (
         <Tooltip {...tooltipProps}>
-          <TooltipTrigger {...tooltipTriggerProps}>
+          <TooltipTrigger asChild {...tooltipTriggerProps}>
             {component}
           </TooltipTrigger>
 
