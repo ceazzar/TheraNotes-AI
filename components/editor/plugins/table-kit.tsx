@@ -8,15 +8,14 @@ import {
 } from '@platejs/table/react';
 
 import {
-  TableCellElement,
-  TableCellHeaderElement,
-  TableElement,
-  TableRowElement,
+  SimpleTableCellElement,
+  SimpleTableElement,
+  SimpleTableRowElement,
 } from '@/components/ui/table-node-simple';
 
 export const TableKit = [
-  TablePlugin.withComponent(TableElement),
-  TableRowPlugin.withComponent(TableRowElement),
-  TableCellPlugin.withComponent(TableCellElement),
-  TableCellHeaderPlugin.withComponent(TableCellHeaderElement),
+  TablePlugin.withComponent(SimpleTableElement),
+  TableRowPlugin.withComponent(SimpleTableRowElement),
+  TableCellPlugin.withComponent(SimpleTableCellElement),
+  TableCellHeaderPlugin.withComponent(SimpleTableCellElement),
 ];
