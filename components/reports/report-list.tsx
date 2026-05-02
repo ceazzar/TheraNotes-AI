@@ -62,8 +62,7 @@ export function ReportList() {
         }
 
         setLoading(false)
-      })
-      .catch(() => {
+      }, () => {
         if (isActive) setLoading(false)
       })
 
