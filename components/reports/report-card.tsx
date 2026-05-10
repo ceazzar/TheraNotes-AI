@@ -1,27 +1,47 @@
 'use client'
 
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent, type CSSProperties } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { FileText, Trash2 } from 'lucide-react'
 
-const statusConfig: Record<string, { label: string; className: string }> = {
+// Round-3 VC-6: status badges previously used raw Tailwind palette including
+// bg-purple-500, the only purple in the app. Mapped to the existing tn-*
+// severity tokens (warn / sugg / ok / crit) so badges share the design
+// system's palette and a future palette change updates one place.
+const statusConfig: Record<string, { label: string; style: CSSProperties }> = {
   draft: {
     label: 'Draft',
-    className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+    style: {
+      background: 'var(--tn-warn-bg)',
+      color: 'var(--tn-warn)',
+      borderColor: 'var(--tn-warn-line)',
+    },
   },
   generating: {
     label: 'Generating',
-    className: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+    style: {
+      background: 'var(--tn-sugg-bg)',
+      color: 'var(--tn-sugg)',
+      borderColor: 'var(--tn-sugg-line)',
+    },
   },
   ready: {
     label: 'Ready',
-    className: 'bg-green-500/10 text-green-500 border-green-500/20',
+    style: {
+      background: 'var(--tn-ok-bg)',
+      color: 'var(--tn-ok)',
+      borderColor: 'var(--tn-ok-line)',
+    },
   },
   failed: {
     label: 'Failed',
-    className: 'bg-red-500/10 text-red-500 border-red-500/20',
+    style: {
+      background: 'var(--tn-crit-bg)',
+      color: 'var(--tn-crit)',
+      borderColor: 'var(--tn-crit-line)',
+    },
   },
 }
 
@@ -109,7 +129,7 @@ export function ReportCard({
                     : 'FCA Report'}
                 </h3>
               </div>
-              <Badge variant="outline" className={cn('shrink-0', config.className)}>
+              <Badge variant="outline" className="shrink-0" style={config.style}>
                 {config.label}
               </Badge>
             </div>
