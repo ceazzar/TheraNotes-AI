@@ -34,11 +34,21 @@ export function ReportList() {
   const [reports, setReports] = useState<ReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  // Round-3 IA-2: debounce the search term before it hits the Supabase
+  // fetch effect. Without this, every keystroke triggers a 500-row, ~350KB
+  // Supabase round-trip plus a full grid re-render. 250ms is the sweet
+  // spot — typing feels instant, the network does ~1 request per word.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Fetch one page at a time. Pagination is intentionally simple — load-more
   // button rather than infinite scroll, because clinicians scan a list rather
@@ -61,7 +71,7 @@ export function ReportList() {
       // covers the whole working set rather than just the first page. This
       // is the difference between "no matches found" (false) and "showing
       // 0 of 500 reports" (honest). Round-2 NEW-5.
-      const searching = search.trim().length > 0
+      const searching = debouncedSearch.trim().length > 0
       const effectivePageSize = searching ? SEARCH_PAGE_SIZE : PAGE_SIZE
       const from = searching ? 0 : page * effectivePageSize
       const to = from + effectivePageSize - 1
@@ -117,19 +127,19 @@ export function ReportList() {
     return () => {
       isActive = false
     }
-  }, [supabase, page, statusFilter, search])
+  }, [supabase, page, statusFilter, debouncedSearch])
 
   // Reset to page 0 whenever filter or search changes (search switches the
   // fetch into a single big window, so we need to re-fetch when it toggles).
   useEffect(() => {
     setPage(0)
     setReports([])
-  }, [statusFilter, search])
+  }, [statusFilter, debouncedSearch])
 
   // Client-side search across the loaded page set. For larger datasets a
   // server-side ilike on participant_name would be a follow-up.
   const filteredReports = useMemo(() => {
-    const term = search.trim().toLowerCase()
+    const term = debouncedSearch.trim().toLowerCase()
     if (!term) return reports
     return reports.filter((r) => {
       const name = Array.isArray(r.assessments)
@@ -137,7 +147,7 @@ export function ReportList() {
         : r.assessments?.participant_name
       return name?.toLowerCase().includes(term)
     })
-  }, [reports, search])
+  }, [reports, debouncedSearch])
 
   const handleDelete = useCallback(async (id: string) => {
     const response = await fetch(`/api/reports/${id}`, { method: 'DELETE' })
@@ -258,7 +268,7 @@ export function ReportList() {
               />
             ))}
           </div>
-          {hasMore && !search && (
+          {hasMore && !debouncedSearch && (
             <div className="flex justify-center pt-2">
               <Button
                 variant="outline"

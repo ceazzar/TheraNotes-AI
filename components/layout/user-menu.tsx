@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut, User } from 'lucide-react'
+import { LogOut, Settings, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchProfile } from '@/lib/profile'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,12 +18,22 @@ import {
 
 export function UserMenu() {
   const [email, setEmail] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) setEmail(user.email)
+    void supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      if (user.email) setEmail(user.email)
+      // Round-3 PM-7: prefer profile display_name for the avatar initials so a
+      // clinician with a real name doesn't see their email's first two chars.
+      try {
+        const profile = await fetchProfile(supabase, user.id)
+        if (profile?.display_name) setDisplayName(profile.display_name)
+      } catch {
+        // Profile is optional — avatar falls back to email initials.
+      }
     })
   }, [supabase])
 
@@ -47,7 +58,20 @@ export function UserMenu() {
     router.refresh()
   }, [router, supabase])
 
-  const initials = email ? email.slice(0, 2).toUpperCase() : '?'
+  const initials = (() => {
+    if (displayName) {
+      const parts = displayName.trim().split(/\s+/)
+      const first = parts[0]?.[0] ?? ''
+      const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : ''
+      const result = (first + second).toUpperCase()
+      if (result) return result
+    }
+    return email ? email.slice(0, 2).toUpperCase() : '?'
+  })()
+
+  const handleNavigateSettings = useCallback(() => {
+    router.push('/settings')
+  }, [router])
 
   return (
     <DropdownMenu>
@@ -69,6 +93,11 @@ export function UserMenu() {
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem onClick={handleNavigateSettings}>
+          <Settings size={14} />
+          Settings
+        </DropdownMenuItem>
 
         <DropdownMenuItem onClick={handleSignOut}>
           <LogOut size={14} />

@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import { logGeneration } from '@/lib/ai/log'
@@ -14,13 +15,15 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    return new Response('Unauthorized', { status: 401 })
+    // QA-4 round-3: return JSON to match /api/generate so the client error
+    // path (which calls res.json()) doesn't throw on a text/plain payload.
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { selectedText, instruction, sectionContext, reportId } = await request.json()
 
   if (!selectedText || !instruction) {
-    return new Response('Missing selectedText or instruction', { status: 400 })
+    return NextResponse.json({ error: 'Missing selectedText or instruction' }, { status: 400 })
   }
 
   const systemPrompt = `You are a clinical writing expert specialising in NDIS Functional Capacity Assessments (FCAs) for Australian allied health professionals.
