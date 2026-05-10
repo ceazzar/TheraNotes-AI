@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback } from "react";
-import { X, Sparkles } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Flag } from "@/lib/workspace/types";
 
@@ -95,7 +95,7 @@ export function FlagPopover({
           size="sm"
           onClick={() => onApply(flag)}
         >
-          <Sparkles size={11} /> Apply fix
+          <Check size={11} /> Apply fix
         </Button>
         <Button
           variant="outline"
