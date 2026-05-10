@@ -744,6 +744,38 @@
   opacity: 0.9;
 }
 
+/* Round-3 UA-4: Resume pill on failed-with-partial cards. Visible by
+   default (not hover-revealed like delete) because recoverable work is
+   the action we want to surface, not hide. */
+.tn-card-resume {
+  position: absolute;
+  top: 8px;
+  right: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--tn-line);
+  background: var(--tn-bg);
+  color: var(--tn-ink);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 2;
+}
+.tn-card-resume:hover {
+  background: var(--tn-accent-wash);
+  border-color: var(--tn-accent);
+  color: var(--tn-accent-ink);
+}
+.tn-card-resume:focus-visible {
+  outline: 2px solid var(--tn-accent);
+  outline-offset: 2px;
+}
+
 /* ==========================================================================
    SCREEN 2 -- Progress overlay
    ========================================================================== */
@@ -1314,6 +1346,49 @@
   background: color-mix(in srgb, var(--tn-crit) 8%, transparent);
   color: var(--tn-crit);
   font-size: 12px;
+}
+
+/* Round-3 UA-4: Resume banner. Surfaces only on failed-with-partial
+   reports. Visually similar to tn-ws-error but in the accent palette
+   (recovery, not failure) and includes a primary action button. */
+.tn-ws-resume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--tn-accent-line, var(--tn-line));
+  background: var(--tn-accent-wash);
+}
+.tn-ws-resume-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--tn-ink);
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+}
+.tn-ws-resume-body > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--tn-accent);
+}
+.tn-ws-resume-title {
+  font-weight: 500;
+}
+.tn-ws-resume-sub {
+  color: var(--tn-muted-1);
+  margin-top: 2px;
+  font-size: 12.5px;
+}
+.tn-ws-resume-error {
+  color: var(--tn-crit);
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.tn-spin {
+  animation: tn-spin 1s linear infinite;
 }
 
 /* --- Paper scroll & container --- */

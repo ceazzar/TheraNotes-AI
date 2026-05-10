@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Shield } from 'lucide-react'
+import { ChevronLeft, RotateCw, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Topbar } from '@/components/layout/topbar'
 import { saveAs } from 'file-saver'
@@ -13,11 +13,22 @@ import { createClient } from '@/lib/supabase/client'
 import { reportToPlate } from '@/lib/editor/report-to-plate'
 import { plateToSections } from '@/lib/editor/plate-to-sections'
 import { useAutoSave } from '@/hooks/use-auto-save'
+import templateData from '@/lib/template.json'
 import { PlateDocEditor, type PlateEditorHandle } from './plate-editor'
 import { TocSidebar } from './toc-sidebar'
 import { WorkspaceFooter } from './workspace-footer'
 import type { ReportSection, Flag, Participant } from '@/lib/workspace/types'
 import type { Value } from 'platejs'
+
+// Round-3 UA-4: list of sections the Resume loop will iterate over when
+// continuing a failed-with-partial report. Mirrors the generatableSections
+// filter in app/generate/page.tsx so a resume produces the same surface
+// as a from-scratch generation would.
+type GeneratableSection = { name: string; order: number; auto_generate?: boolean }
+const RESUMABLE_SECTIONS = (templateData.sections as GeneratableSection[])
+  .filter((s) => !s.auto_generate)
+  .sort((a, b) => a.order - b.order)
+  .map((s) => s.name)
 
 type Sections = Record<string, { title: string; content: string }>
 
@@ -72,6 +83,16 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
   const [activeSection, setActiveSection] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Round-3 UA-4: Resume affordance state. `isResuming` gates the banner +
+  // disables the button while the loop runs. `resumeProgress` surfaces
+  // per-section progress because the loop can take 1-3 minutes for the
+  // remaining 3-5 sections on a typical failed report.
+  const [isResuming, setIsResuming] = useState(false)
+  const [resumeError, setResumeError] = useState<string | null>(null)
+  const [resumeProgress, setResumeProgress] = useState<
+    { current: number; total: number; sectionName: string } | null
+  >(null)
 
   const editorRef = useRef<PlateEditorHandle>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -242,6 +263,98 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     }
   }, [reportId])
 
+  // Round-3 UA-4: which template sections are missing from this report?
+  // Used to decide whether to surface the Resume banner AND as the work
+  // list for handleResume. We compute against RESUMABLE_SECTIONS (no
+  // auto_generate sections) because the loop in /api/generate doesn't
+  // synthesize those either.
+  const missingSections = useMemo(() => {
+    if (!report) return []
+    return RESUMABLE_SECTIONS.filter((name) => !report.sections[name])
+  }, [report])
+
+  const canResume =
+    !!report &&
+    !!report.assessment_id &&
+    report.status === 'failed' &&
+    Object.keys(report.sections).length > 0 &&
+    missingSections.length > 0
+
+  const handleResume = useCallback(async () => {
+    if (!report || !report.assessment_id || isResuming) return
+    setIsResuming(true)
+    setResumeError(null)
+
+    const total = missingSections.length
+    const accumulated: Sections = { ...report.sections }
+
+    try {
+      for (let i = 0; i < missingSections.length; i++) {
+        const sectionName = missingSections[i]
+        setResumeProgress({ current: i + 1, total, sectionName })
+
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assessmentId: report.assessment_id,
+            reportId: report.id,
+            sectionId: sectionName,
+          }),
+        })
+
+        if (!response.ok) {
+          const errData = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
+          throw new Error(
+            errData.error || `Failed to generate "${sectionName}"`,
+          )
+        }
+
+        const data = (await response.json()) as {
+          sectionId: string
+          content: string
+        }
+        accumulated[data.sectionId] = {
+          title: data.sectionId,
+          content: data.content,
+        }
+      }
+
+      // Loop succeeded. Roll the editor + report state forward without a
+      // page reload so the user sees the new sections immediately.
+      const { value, sectionKeys: keys } = reportToPlate(accumulated)
+      setPlateValue(value)
+      setSectionKeys(keys)
+      setTocSections(
+        keys.map((k) => ({ id: k, title: accumulated[k]?.title ?? k })),
+      )
+      setReport((prev) =>
+        prev ? { ...prev, sections: accumulated, status: 'ready' } : prev,
+      )
+
+      // Server already wrote the sections per-call; explicitly flip the
+      // report status back to 'ready' to clear the failed flag from the
+      // reports list and from the workspace header.
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase
+          .from('reports')
+          .update({ status: 'ready' })
+          .eq('id', report.id)
+          .eq('user_id', user.id)
+      }
+    } catch (err) {
+      setResumeError(
+        err instanceof Error ? err.message : 'Failed to resume generation',
+      )
+    } finally {
+      setIsResuming(false)
+      setResumeProgress(null)
+    }
+  }, [report, missingSections, isResuming, supabase])
+
   const handleExportDocx = useCallback(async () => {
     const editor = editorRef.current?.editor
     if (!editor) return
@@ -378,6 +491,56 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         {reviewError && (
           <div className="tn-ws-error" role="status">
             {reviewError}
+          </div>
+        )}
+
+        {/* Round-3 UA-4: Resume banner. Surfaces only when the report failed
+            mid-generation but already has at least one section persisted —
+            the recoverable case. Mirrors the per-section loop from
+            /generate/page.tsx, just against the existing reportId so no
+            new report/assessment row is inserted. */}
+        {canResume && (
+          <div
+            className="tn-ws-resume"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="tn-ws-resume-body">
+              <RotateCw
+                size={14}
+                className={isResuming ? 'tn-spin' : undefined}
+              />
+              <div>
+                <div className="tn-ws-resume-title">
+                  {isResuming
+                    ? resumeProgress
+                      ? `Generating ${resumeProgress.sectionName} (${resumeProgress.current} of ${resumeProgress.total})…`
+                      : 'Resuming generation…'
+                    : `This report stopped with ${
+                        Object.keys(report.sections).length
+                      } of ${RESUMABLE_SECTIONS.length} sections complete.`}
+                </div>
+                {!isResuming && (
+                  <div className="tn-ws-resume-sub">
+                    Continue with the {missingSections.length} remaining
+                    {missingSections.length === 1 ? ' section' : ' sections'}.
+                    Existing sections will be kept.
+                  </div>
+                )}
+                {resumeError && (
+                  <div className="tn-ws-resume-error">{resumeError}</div>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleResume}
+              disabled={isResuming}
+            >
+              <RotateCw size={13} />
+              {isResuming ? 'Resuming…' : 'Continue generation'}
+            </Button>
           </div>
         )}
 

@@ -263,6 +263,16 @@ export function ReportList() {
                 sectionCount={r.sections ? Object.keys(r.sections).length : 0}
                 flagCount={r.planner_review?.flags?.length ?? 0}
                 updatedAt={r.updated_at}
+                // Round-3 UA-4: failed reports with at least one persisted
+                // section have recoverable work — the per-section infra in
+                // /api/generate already preserves what landed, so resume is
+                // a client-side loop, not a from-scratch re-run.
+                canResume={
+                  r.status === 'failed' &&
+                  !!r.assessment_id &&
+                  !!r.sections &&
+                  Object.keys(r.sections).length > 0
+                }
                 onClick={() => router.push(`/reports/${r.id}`)}
                 onDelete={() => handleDelete(r.id)}
               />

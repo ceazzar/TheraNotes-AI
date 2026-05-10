@@ -4,7 +4,7 @@ import { useEffect, useState, type MouseEvent, type CSSProperties } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { FileText, Trash2 } from 'lucide-react'
+import { FileText, RotateCw, Trash2 } from 'lucide-react'
 
 // Round-3 VC-6: status badges previously used raw Tailwind palette including
 // bg-purple-500, the only purple in the app. Mapped to the existing tn-*
@@ -51,6 +51,10 @@ interface ReportCardProps {
   sectionCount: number
   flagCount: number
   updatedAt: string
+  /** Round-3 UA-4: when set on a failed report with partial sections, the
+   *  card shows a Resume affordance that opens the workspace where the
+   *  remaining sections can be continued from. */
+  canResume?: boolean
   onClick: () => void
   onDelete: () => void
 }
@@ -82,6 +86,7 @@ export function ReportCard({
   sectionCount,
   flagCount,
   updatedAt,
+  canResume = false,
   onClick,
   onDelete,
 }: ReportCardProps) {
@@ -143,6 +148,23 @@ export function ReportCard({
           </CardContent>
         </Card>
       </button>
+      {canResume && (
+        <button
+          type="button"
+          className="tn-card-resume"
+          onClick={(event) => {
+            event.stopPropagation()
+            // Resume routes through the workspace, which is where the
+            // continuation loop lives and surfaces per-section progress.
+            onClick()
+          }}
+          aria-label="Resume report — continue generating missing sections"
+          title="Continue generating the missing sections"
+        >
+          <RotateCw size={11} />
+          <span className="text-xs">Resume</span>
+        </button>
+      )}
       <button
         type="button"
         className={cn('tn-card-delete', confirming && 'tn-card-delete-confirm')}
