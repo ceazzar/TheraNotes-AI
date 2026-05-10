@@ -47,7 +47,11 @@ function parseMarkdownTable(tableBlock: string): Descendant | null {
       type: 'tr',
       children: cells.map((text) => ({
         type: 'td',
-        children: [{ type: 'p', children: [{ text: text.replace(/\*\*/g, '') }] }],
+        // Strip bold markers AND any consecutive backslashes preceding `[` or
+        // `]` — the latter prevents accumulation of escapes when LLM-emitted
+        // markdown round-trips through the editor multiple times. Pulled from
+        // upstream commit ca4d261 (verified against same regex pattern).
+        children: [{ type: 'p', children: [{ text: text.replace(/\*\*/g, '').replace(/\\+(?=[[\]])/g, '') }] }],
       })),
     })),
   } as Descendant
@@ -134,7 +138,24 @@ export function reportToPlate(sections: Sections): {
             nodes.push(...fallback)
           }
         } else if (block.text.trim()) {
-          const deserialized = tempEditor.api.markdown.deserialize(block.text)
+          // Strip accumulated bracket-escapes for the same reason as in
+          // parseMarkdownTable above (ca4d261). Then filter out ghost
+          // code-block nodes that the Plate markdown deserializer produces
+          // when report content has stray triple-backtick or indented
+          // sequences — these render as empty boxes in the editor and
+          // confuse clinicians (edad007 issue #2).
+          const cleaned = block.text.replace(/\\+(?=[[\]])/g, '')
+          const deserialized = tempEditor.api.markdown
+            .deserialize(cleaned)
+            .filter((node: Descendant & { type?: string }) => {
+              if (node.type === 'code_block') {
+                const text = (node.children as Array<{ text?: string }>)
+                  ?.map((c) => c.text ?? '')
+                  .join('')
+                return text.trim().length > 0
+              }
+              return true
+            })
           nodes.push(...deserialized)
         }
       }

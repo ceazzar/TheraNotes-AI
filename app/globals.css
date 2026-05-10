@@ -1320,6 +1320,24 @@
   font-size: 15px;
   line-height: 1.8;
 }
+/* Defensive override: Plate's default styles target the [data-slate-editor]
+   element with enough specificity to win against `.tn-doc` rules. Mirror
+   the typography one level deeper so the clinical-document look survives
+   into the editable surface. Pulled from upstream commit edad007 (issue #5). */
+.tn-doc [data-slate-editor] {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  color: #1b1a20;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.tn-doc [data-slate-editor] h1,
+.tn-doc [data-slate-editor] h2,
+.tn-doc [data-slate-editor] h3,
+.tn-doc [data-slate-editor] h4,
+.tn-doc [data-slate-editor] h5,
+.tn-doc [data-slate-editor] h6 {
+  font-family: var(--font-sans);
+}
 .tn-doc h1 {
   font-family: var(--font-sans);
   font-size: 28px;
