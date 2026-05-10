@@ -6,6 +6,14 @@ import {
   buildCoherencePrompt,
 } from '@/lib/ai/prompts'
 import { getDomainDataForSection, type Assessment } from '@/lib/ai/domain-mapper'
+import type { ClinicianProfile } from '@/lib/profile'
+import {
+  getAvailableIntake,
+  missingFromRequires,
+  readIntakeMetadata,
+  type IntakeBucket,
+} from '@/lib/ai/intake'
+import { buildHeaderTable } from '@/lib/ai/header'
 import { logGeneration } from '@/lib/ai/log'
 import template from '@/lib/template.json'
 
@@ -23,6 +31,10 @@ interface SectionTemplate {
   phase: string
   description: string
   expected_inputs: string[]
+  /** Intake buckets that must be present before this section can be generated. */
+  requires?: string[]
+  /** Intake buckets used if available but not required. */
+  references?: string[]
   typical_length: string
   auto_generate?: boolean
 }
@@ -33,6 +45,9 @@ export interface GenerateSectionParams {
   clinicalNotes?: string
   /** Structured assessment object — when provided, domain data is extracted automatically. */
   assessment?: Assessment
+  /** Clinician profile (display name, credentials, AHPRA, clinic). Falls back into Header
+   *  fields when per-report intake omits them. */
+  profile?: ClinicianProfile | null
   userId: string
   reportId?: string
   assessmentId?: string
@@ -47,6 +62,13 @@ export interface GenerateSectionResult {
   title: string
   content: string
   insufficientData: boolean
+  /**
+   * 'pending' = required intake missing, no LLM call made, no tokens spent.
+   * 'ready'   = section was generated.
+   */
+  status: 'ready' | 'pending'
+  /** Buckets that were missing when status === 'pending'. */
+  missing?: IntakeBucket[]
 }
 
 export async function generateSection(
@@ -62,6 +84,59 @@ export async function generateSection(
     throw new Error(`Section "${sectionId}" not found in template`)
   }
 
+  // ---------------------------------------------------------------------------
+  // Skip-pending gate: check intake against `requires` BEFORE any LLM work.
+  // If a required bucket is missing, return a pending stub with no token spend.
+  // The frontend renders these as placeholder cards with "Add data" CTAs.
+  // ---------------------------------------------------------------------------
+  const requires = sectionTemplate.requires ?? []
+  if (requires.length > 0) {
+    const available = getAvailableIntake(assessment, {
+      hasReportSoFar: Object.keys(previousSections).length > 0,
+    })
+    const missing = missingFromRequires(requires, available)
+    if (missing.length > 0) {
+      return {
+        sectionId: sectionTemplate.name,
+        title: sectionTemplate.name,
+        content: '',
+        insufficientData: false,
+        status: 'pending',
+        missing,
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Header section: deterministic transcription from structured intake.
+  // No LLM call, no reasoning latency, no token spend. The Header is pure data.
+  // ---------------------------------------------------------------------------
+  if (sectionTemplate.name === 'Report Header / Participant Details' && assessment) {
+    const headerContent = buildHeaderTable(assessment, params.profile)
+    await logGeneration({
+      userId,
+      reportId: params.reportId,
+      assessmentId: params.assessmentId,
+      sectionId: sectionTemplate.name,
+      operation: 'generate',
+      systemPrompt: '[deterministic header builder — no LLM call]',
+      userPrompt: '[structured intake → markdown table]',
+      model: 'deterministic',
+      rawOutput: headerContent,
+      processedOutput: headerContent,
+      insufficientData: headerContent.includes('[INSUFFICIENT DATA'),
+      latencyMs: 0,
+      status: 'success',
+    })
+    return {
+      sectionId: sectionTemplate.name,
+      title: sectionTemplate.name,
+      content: headerContent,
+      insufficientData: headerContent.includes('[INSUFFICIENT DATA'),
+      status: 'ready',
+    }
+  }
+
   let clinicalNotes = assessment
     ? getDomainDataForSection(sectionTemplate.name, assessment)
     : (rawNotes ?? '')
@@ -69,6 +144,54 @@ export async function generateSection(
   // Append correction context if available (assessment path passes it separately)
   if (correctionContext) {
     clinicalNotes += correctionContext
+  }
+
+  // ---------------------------------------------------------------------------
+  // Inject structured intake into the prompt when the section needs it.
+  // Part D consumes standardized_scores; Part E quotes ndis_goals verbatim.
+  // We piggyback on the existing questionnaireData prompt slot rather than
+  // adding new parameters across every call site.
+  // ---------------------------------------------------------------------------
+  let effectiveQuestionnaireData = questionnaireData
+  if (assessment) {
+    const sectionExpects = sectionTemplate.expected_inputs ?? []
+    const augmentations: string[] = []
+
+    if (
+      sectionExpects.includes('standardized_scores') &&
+      assessment.standardized_scores &&
+      Object.keys(assessment.standardized_scores).length > 0
+    ) {
+      augmentations.push(
+        `STANDARDISED ASSESSMENT SCORES (cite these directly):\n${JSON.stringify(
+          assessment.standardized_scores,
+          null,
+          2,
+        )}`,
+      )
+    }
+
+    if (
+      sectionExpects.includes('ndis_goals') &&
+      Array.isArray(assessment.ndis_goals) &&
+      assessment.ndis_goals.length > 0
+    ) {
+      const quoted = assessment.ndis_goals
+        .map((g, i) => `${i + 1}. "${g}"`)
+        .join('\n')
+      augmentations.push(
+        `PARTICIPANT-STATED NDIS GOALS (quote VERBATIM under "## NDIS Goals" — do not paraphrase or infer):\n${quoted}`,
+      )
+    }
+
+    if (augmentations.length > 0) {
+      effectiveQuestionnaireData = [
+        questionnaireData ?? '',
+        ...augmentations,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    }
   }
 
   const ragResults = await queryRag({
@@ -100,7 +223,7 @@ export async function generateSection(
       sectionTemplate.typical_length,
       allExemplars,
       clinicalNotes,
-      questionnaireData,
+      effectiveQuestionnaireData,
       reportSoFar,
     )
   } else {
@@ -110,23 +233,23 @@ export async function generateSection(
       sectionTemplate.typical_length,
       allExemplars,
       clinicalNotes,
-      questionnaireData,
+      effectiveQuestionnaireData,
     )
   }
 
-  const model = process.env.GENERATION_MODEL || 'gpt-4o'
-  const temperature = 0.3
+  const model = process.env.GENERATION_MODEL || 'gpt-5.5'
+  const reasoningEffort = (process.env.REASONING_EFFORT as 'low' | 'medium' | 'high' | 'xhigh') || 'high'
   const startTime = Date.now()
 
-  let response: OpenAI.Chat.Completions.ChatCompletion
+  let response: OpenAI.Responses.Response
   try {
-    response = await getOpenAI().chat.completions.create({
+    response = await getOpenAI().responses.create({
       model,
-      messages: [
+      input: [
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
       ],
-      temperature,
+      reasoning: { effort: reasoningEffort },
     })
   } catch (err) {
     await logGeneration({
@@ -144,7 +267,6 @@ export async function generateSection(
         source: c.sourceFile ?? undefined,
       })),
       model,
-      temperature,
       status: 'error',
       errorMessage: err instanceof Error ? err.message : String(err),
       latencyMs: Date.now() - startTime,
@@ -153,9 +275,15 @@ export async function generateSection(
   }
 
   const latencyMs = Date.now() - startTime
-  const content = response.choices[0].message.content ?? ''
+  const content = response.output_text ?? ''
   const insufficientData = content.includes('[INSUFFICIENT DATA')
   const processedContent = stripDuplicateHeading(content, sectionTemplate.name)
+  const inputTokens = response.usage?.input_tokens
+  const outputTokens = response.usage?.output_tokens
+  const totalTokens =
+    inputTokens !== undefined && outputTokens !== undefined
+      ? inputTokens + outputTokens
+      : response.usage?.total_tokens
 
   await logGeneration({
     userId,
@@ -172,13 +300,12 @@ export async function generateSection(
       source: c.sourceFile ?? undefined,
     })),
     model,
-    temperature,
     rawOutput: content,
     processedOutput: processedContent,
     insufficientData,
-    promptTokens: response.usage?.prompt_tokens,
-    completionTokens: response.usage?.completion_tokens,
-    totalTokens: response.usage?.total_tokens,
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens,
     latencyMs,
     status: 'success',
   })
@@ -188,6 +315,7 @@ export async function generateSection(
     title: sectionTemplate.name,
     content: processedContent,
     insufficientData,
+    status: 'ready',
   }
 }
 
@@ -198,19 +326,22 @@ export async function runCoherenceCheck(params: {
   reportId?: string
 }): Promise<string> {
   const prompt = buildCoherencePrompt(params.fullReport)
-  const model = process.env.GENERATION_MODEL || 'gpt-4o'
+  const model = process.env.GENERATION_MODEL || 'gpt-5.5'
+  const reasoningEffort = (process.env.REASONING_EFFORT as 'low' | 'medium' | 'high' | 'xhigh') || 'high'
   const startTime = Date.now()
 
-  const response = await getOpenAI().chat.completions.create({
+  const response = await getOpenAI().responses.create({
     model,
-    messages: [
+    input: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ],
-    temperature: 0,
+    reasoning: { effort: reasoningEffort },
   })
 
-  const content = response.choices[0].message.content ?? ''
+  const content = response.output_text ?? ''
+  const inputTokens = response.usage?.input_tokens
+  const outputTokens = response.usage?.output_tokens
 
   if (params.userId) {
     await logGeneration({
@@ -221,12 +352,14 @@ export async function runCoherenceCheck(params: {
       systemPrompt: prompt.system,
       userPrompt: prompt.user,
       model,
-      temperature: 0,
       rawOutput: content,
       processedOutput: content,
-      promptTokens: response.usage?.prompt_tokens,
-      completionTokens: response.usage?.completion_tokens,
-      totalTokens: response.usage?.total_tokens,
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens:
+        inputTokens !== undefined && outputTokens !== undefined
+          ? inputTokens + outputTokens
+          : undefined,
       latencyMs: Date.now() - startTime,
       status: 'success',
     })

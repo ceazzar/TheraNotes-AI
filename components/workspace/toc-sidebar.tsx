@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, PanelLeftClose, PanelLeft } from "lucide-react";
+import { ListTree, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { Flag, ReportSection } from "@/lib/workspace/types";
@@ -35,8 +35,8 @@ export function TocSidebar({
   return (
     <aside className="tn-side">
       <div className="tn-side-head">
-        <Sparkles size={14} />
-        TheraNotes
+        <ListTree size={14} />
+        Sections
         <button
           className="tn-side-collapse"
           onClick={onToggleCollapse}
@@ -93,17 +93,9 @@ export function TocSidebar({
               );
             })}
 
-            <div className="tn-toc-label" style={{ marginTop: 14 }}>
-              Document
-            </div>
-            <button className="tn-toc-item">
-              <span className="tn-toc-dot" data-status="untouched" />
-              <span className="tn-toc-name">Appendices</span>
-            </button>
-            <button className="tn-toc-item">
-              <span className="tn-toc-dot" data-status="untouched" />
-              <span className="tn-toc-name">Signatures</span>
-            </button>
+            {/* Day-1 review: removed dead "Appendices" and "Signatures" entries.
+                Both rendered as TOC items with no onClick — false affordances.
+                Reintroduce with real handlers when those features actually ship. */}
           </div>
 
           {/* NDIS Planner Review summary */}
@@ -142,11 +134,11 @@ function SidebarFlagSummary({
         </span>
         <span className="tn-count" data-sev="warning">
           <span className="tn-count-dot" />
-          {warn} warnings
+          {warn} warning{warn === 1 ? '' : 's'}
         </span>
         <span className="tn-count" data-sev="suggestion">
           <span className="tn-count-dot" />
-          {sugg} suggestion
+          {sugg} suggestion{sugg === 1 ? '' : 's'}
         </span>
       </div>
       <div className="tn-side-review-list">

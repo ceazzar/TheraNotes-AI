@@ -22,16 +22,19 @@ export async function routeFeedbackToSections(
 
   const prompt = buildRevisionRoutingPrompt(sectionNames, userFeedback)
 
-  const response = await getOpenAI().chat.completions.create({
-    model: process.env.GENERATION_MODEL || 'gpt-4o',
-    messages: [
+  const routingModel = process.env.GENERATION_MODEL || 'gpt-5.5'
+  // Routing is a short structured-output task; medium effort is enough.
+  const routingEffort = (process.env.ROUTING_REASONING_EFFORT as 'low' | 'medium' | 'high') || 'medium'
+  const response = await getOpenAI().responses.create({
+    model: routingModel,
+    input: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ],
-    temperature: 0,
+    reasoning: { effort: routingEffort },
   })
 
-  let raw = response.choices[0].message.content ?? '{}'
+  let raw = response.output_text ?? '{}'
   if (raw.includes('```')) {
     raw = raw.includes('```json')
       ? raw.split('```json').pop()!.split('```')[0]
@@ -98,19 +101,22 @@ export async function reviseSection(
     feedback,
   )
 
-  const model = process.env.GENERATION_MODEL || 'gpt-4o'
+  const model = process.env.GENERATION_MODEL || 'gpt-5.5'
+  const reasoningEffort = (process.env.REASONING_EFFORT as 'low' | 'medium' | 'high' | 'xhigh') || 'high'
   const startTime = Date.now()
 
-  const response = await getOpenAI().chat.completions.create({
+  const response = await getOpenAI().responses.create({
     model,
-    messages: [
+    input: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ],
-    temperature: 0.3,
+    reasoning: { effort: reasoningEffort },
   })
 
-  const revisedContent = response.choices[0].message.content ?? ''
+  const revisedContent = response.output_text ?? ''
+  const inputTokens = response.usage?.input_tokens
+  const outputTokens = response.usage?.output_tokens
 
   await logGeneration({
     userId,
@@ -126,12 +132,14 @@ export async function reviseSection(
       source: c.sourceFile ?? undefined,
     })),
     model,
-    temperature: 0.3,
     rawOutput: revisedContent,
     processedOutput: revisedContent,
-    promptTokens: response.usage?.prompt_tokens,
-    completionTokens: response.usage?.completion_tokens,
-    totalTokens: response.usage?.total_tokens,
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens:
+      inputTokens !== undefined && outputTokens !== undefined
+        ? inputTokens + outputTokens
+        : undefined,
     latencyMs: Date.now() - startTime,
     status: 'success',
   })

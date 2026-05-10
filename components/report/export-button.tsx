@@ -1,70 +1,45 @@
 'use client'
 
-import { Download } from 'lucide-react'
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-  AlignmentType,
-  BorderStyle,
-} from 'docx'
+import { useMemo, useState } from 'react'
+import { Download, Loader2 } from 'lucide-react'
 import { saveAs } from 'file-saver'
 import { Button } from '@/components/ui/button'
+import { generateDocx } from '@/lib/export/docx'
+import { fetchProfile } from '@/lib/profile'
+import { createClient } from '@/lib/supabase/client'
 
 interface ExportButtonProps {
   sections: Record<string, { title: string; content: string }>
 }
 
+/**
+ * Single delegating export button. The previous version inlined a duplicate
+ * (and broken) docx renderer; now delegates to lib/export/docx so the result
+ * page and the workspace produce byte-identical DOCX output and any future
+ * formatting fix lands in one place.
+ */
 export function ExportButton({ sections }: ExportButtonProps) {
+  const supabase = useMemo(() => createClient(), [])
+  const [exporting, setExporting] = useState(false)
+
   const handleExport = async () => {
-    const children: Paragraph[] = [
-      new Paragraph({
-        text: 'Functional Capacity Assessment Report',
-        heading: HeadingLevel.TITLE,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
-      }),
-    ]
-
-    for (const [, section] of Object.entries(sections)) {
-      children.push(
-        new Paragraph({
-          text: section.title,
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 300, after: 200 },
-          border: {
-            bottom: {
-              style: BorderStyle.SINGLE,
-              size: 1,
-              color: 'CCCCCC',
-            },
-          },
-        })
-      )
-
-      const paragraphs = section.content.split('\n\n')
-      for (const para of paragraphs) {
-        if (!para.trim()) continue
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: para.trim(), size: 22 })],
-            spacing: { after: 120 },
-          })
-        )
-      }
+    setExporting(true)
+    try {
+      // Best-effort: pull the profile for letterhead. If it fails or returns
+      // null, generateDocx falls back to a plain header.
+      const { data: { user } } = await supabase.auth.getUser()
+      const profile = user ? await fetchProfile(supabase, user.id).catch(() => null) : null
+      const blob = await generateDocx(sections, { profile })
+      saveAs(blob, 'FCA-Report.docx')
+    } finally {
+      setExporting(false)
     }
-
-    const doc = new Document({ sections: [{ children }] })
-    const blob = await Packer.toBlob(doc)
-    saveAs(blob, 'FCA-Report.docx')
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleExport}>
-      <Download className="size-3.5" />
-      Export DOCX
+    <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+      {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download className="size-3.5" />}
+      {exporting ? 'Exporting…' : 'Export DOCX'}
     </Button>
   )
 }

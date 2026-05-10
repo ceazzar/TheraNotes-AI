@@ -3,9 +3,31 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
+interface FormattedReportSection {
+  title: string
+  content: string
+  status?: 'ready' | 'pending'
+  missing?: string[]
+}
+
 interface FormattedReportProps {
-  sections: Record<string, { title: string; content: string }>
+  sections: Record<string, FormattedReportSection>
   className?: string
+}
+
+const MISSING_LABELS: Record<string, string> = {
+  client: 'client details',
+  assessor: 'assessor details',
+  assessment: 'assessment date / mode',
+  clinical_notes: 'clinical notes',
+  standardized_scores: 'WHODAS / Sensory Profile scores',
+  ndis_goals: 'participant-stated NDIS goals',
+  report_so_far: 'preceding sections',
+}
+
+function formatMissing(missing: string[] | undefined): string {
+  if (!missing || missing.length === 0) return 'required intake'
+  return missing.map((m) => MISSING_LABELS[m] ?? m).join(', ')
 }
 
 /**
@@ -35,11 +57,31 @@ export function FormattedReport({ sections, className }: FormattedReportProps) {
           {/* Section heading */}
           <h2>{section.title}</h2>
 
-          {/* Render content with paragraph splitting and heading detection */}
-          <ReportContent content={section.content} />
+          {/* Pending placeholder OR generated content */}
+          {section.status === 'pending' ? (
+            <PendingPlaceholder missing={section.missing} />
+          ) : (
+            <ReportContent content={section.content} />
+          )}
         </section>
       ))}
     </article>
+  )
+}
+
+function PendingPlaceholder({ missing }: { missing?: string[] }) {
+  return (
+    <div className="report-pending-card">
+      <div className="report-pending-icon">⏸</div>
+      <div className="report-pending-body">
+        <p className="report-pending-title">This section is pending.</p>
+        <p className="report-pending-detail">
+          To generate it, add{' '}
+          <strong>{formatMissing(missing)}</strong> in the intake form, then
+          regenerate from the workspace.
+        </p>
+      </div>
+    </div>
   )
 }
 

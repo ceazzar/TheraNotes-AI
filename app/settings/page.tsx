@@ -3,7 +3,8 @@
 import { useState, useCallback } from 'react'
 import { ExemplarUpload } from '@/components/settings/exemplar-upload'
 import { ExemplarList } from '@/components/settings/exemplar-list'
-import { ArrowLeft } from 'lucide-react'
+import { ProfileForm } from '@/components/settings/profile-form'
+import { Topbar } from '@/components/layout/topbar'
 
 export default function SettingsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
@@ -14,33 +15,44 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto py-10 px-4">
+      <Topbar />
+      <div className="max-w-3xl mx-auto py-10 px-4">
         <div className="space-y-1 mb-8">
-          <a
-            href="/generate"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-          >
-            <ArrowLeft className="size-3.5" />
-            Back to Generate
-          </a>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Manage your exemplar reports for RAG-powered generation.
+            Profile, clinic details, and exemplar library.
           </p>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-12">
+          <section>
+            <div className="space-y-1 mb-4">
+              <h2 className="text-lg font-medium">Profile</h2>
+              <p className="text-sm text-muted-foreground">
+                Identity and clinic details that pre-fill every report you generate.
+              </p>
+            </div>
+            <ProfileForm />
+          </section>
+
           <section className="space-y-4">
-            <h2 className="text-lg font-medium">Upload Exemplar</h2>
-            <p className="text-sm text-muted-foreground">
-              Upload completed FCA reports as exemplars. These will be chunked,
-              embedded, and used as style references during report generation.
-            </p>
+            <div className="space-y-1">
+              <h2 className="text-lg font-medium">Upload exemplar</h2>
+              <p className="text-sm text-muted-foreground">
+                Upload completed FCA reports as exemplars. These will be chunked,
+                embedded, and used as style references during report generation.
+              </p>
+            </div>
             <ExemplarUpload onUploadComplete={handleUploadComplete} />
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-lg font-medium">Uploaded Exemplars</h2>
+            <div className="space-y-1">
+              <h2 className="text-lg font-medium">Uploaded exemplars</h2>
+              <p className="text-sm text-muted-foreground">
+                The reports the AI references when generating your style.
+              </p>
+            </div>
             <ExemplarList refreshKey={refreshKey} />
           </section>
         </div>

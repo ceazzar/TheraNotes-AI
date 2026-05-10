@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Search, Shield } from 'lucide-react'
+import { ChevronLeft, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { Topbar } from '@/components/layout/topbar'
 import { saveAs } from 'file-saver'
+import { generateDocx } from '@/lib/export/docx'
+import { fetchProfile } from '@/lib/profile'
 import { createClient } from '@/lib/supabase/client'
 import { reportToPlate } from '@/lib/editor/report-to-plate'
 import { plateToSections } from '@/lib/editor/plate-to-sections'
@@ -79,10 +81,20 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   // Fetch report data
   useEffect(() => {
     async function load() {
+      // Defense-in-depth: explicit user_id filter alongside RLS so a single
+      // policy bug can't expose another clinician's data. Auth check runs
+      // first because /workspace must never serve content to an anon user.
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
       const { data: reportData } = await supabase
         .from('reports')
         .select('id, sections, status, assessment_id, planner_review')
         .eq('id', reportId)
+        .eq('user_id', user.id)
         .single()
 
       if (!reportData) {
@@ -148,13 +160,18 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     if (!editor || !report) return
 
     const sections = plateToSections(editor.children, sectionKeys, editor)
+    // Defense-in-depth: pin the update to this user even though RLS already
+    // enforces it, so an audit log on the row will name the right clinician.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     await supabase
       .from('reports')
       .update({ sections })
       .eq('id', report.id)
+      .eq('user_id', user.id)
   }, [report, sectionKeys, supabase])
 
-  const { markDirty, saveStatus } = useAutoSave({ save: saveToSupabase })
+  const { markDirty, saveStatus, lastError, flush: retrySave } = useAutoSave({ save: saveToSupabase })
 
   // Progress: sections that have real content (not empty or all INSUFFICIENT DATA)
   const touchedSections = useMemo(() => {
@@ -230,41 +247,15 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     if (!editor) return
 
     const sections = plateToSections(editor.children, sectionKeys, editor)
-    const children: Paragraph[] = [
-      new Paragraph({
-        text: 'Functional Capacity Assessment Report',
-        heading: HeadingLevel.TITLE,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
-      }),
-    ]
-
-    for (const [, section] of Object.entries(sections)) {
-      children.push(
-        new Paragraph({
-          text: section.title,
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 300, after: 200 },
-          border: {
-            bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
-          },
-        })
-      )
-      for (const para of section.content.split('\n\n')) {
-        if (!para.trim()) continue
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: para.trim(), size: 22 })],
-            spacing: { after: 120 },
-          })
-        )
-      }
-    }
-
-    const doc = new Document({ sections: [{ children }] })
-    const blob = await Packer.toBlob(doc)
+    // Best-effort profile fetch for letterhead. Failure falls back to a
+    // header-less document — never blocks export.
+    const { data: { user } } = await supabase.auth.getUser()
+    const profile = user
+      ? await fetchProfile(supabase, user.id).catch(() => null)
+      : null
+    const blob = await generateDocx(sections, { profile })
     saveAs(blob, `FCA-${participant?.name ?? 'Report'}.docx`)
-  }, [sectionKeys, participant])
+  }, [sectionKeys, participant, supabase])
 
   if (loading) {
     return (
@@ -307,81 +298,83 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
   if (!report || !plateValue || notFound) {
     return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center gap-3"
-        style={{ background: 'var(--tn-bg)' }}
-      >
-        <p className="text-sm text-muted-foreground">
-          Report not found or you don&apos;t have access.
-        </p>
-        <Link href="/reports" className="tn-btn tn-btn-outline tn-btn-sm">
-          Back to Reports
-        </Link>
+      <div className="flex flex-col min-h-screen">
+        <Topbar />
+        <div
+          className="flex flex-1 flex-col items-center justify-center gap-3"
+          style={{ background: 'var(--tn-bg)' }}
+        >
+          <p className="text-sm text-muted-foreground">
+            Report not found or you don&apos;t have access.
+          </p>
+          <Link href="/reports" className="tn-btn tn-btn-outline tn-btn-sm">
+            Back to Reports
+          </Link>
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="tn-ws"
-      data-sidebar-collapsed={sidebarCollapsed}
-      style={{ '--sidebar-w': '280px' } as React.CSSProperties}
-    >
-      {/* Sidebar */}
-      <TocSidebar
-        sections={tocSections}
-        flags={flags}
-        activeSection={activeSection}
-        collapsed={sidebarCollapsed}
-        touchedSections={touchedSections}
-        progressPct={progressPct}
-        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-        onJumpTo={jumpTo}
-        onOpenFlag={(id) => jumpTo(id)}
-        onReviewAll={reviewAll}
-      />
+    <div className="flex flex-col min-h-screen">
+      <Topbar />
+      <div
+        className="tn-ws"
+        data-sidebar-collapsed={sidebarCollapsed}
+        style={{ '--sidebar-w': '280px' } as React.CSSProperties}
+      >
+        {/* Sidebar */}
+        <TocSidebar
+          sections={tocSections}
+          flags={flags}
+          activeSection={activeSection}
+          collapsed={sidebarCollapsed}
+          touchedSections={touchedSections}
+          progressPct={progressPct}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          onJumpTo={jumpTo}
+          onOpenFlag={(id) => jumpTo(id)}
+          onReviewAll={reviewAll}
+        />
 
-      {/* Main content */}
-      <div className="tn-ws-main">
-        {/* Topbar breadcrumbs */}
-        <div className="tn-ws-topbar">
-          <div className="tn-ws-crumbs">
-            <Button
-              variant="ghost"
-              size="xs"
-              style={{ marginRight: 4 }}
-              onClick={() => router.push('/reports')}
-            >
-              <ChevronLeft size={13} /> Reports
-            </Button>
-            <Link href="/reports" style={{ color: 'inherit', textDecoration: 'none' }}>Reports</Link>
-            <span style={{ color: 'var(--tn-muted-3)' }}>/</span>
-            <b>FCA &mdash; {participant?.name ?? 'Report'}</b>
-            <span
-              style={{
-                color: 'var(--tn-muted-3)',
-                marginLeft: 6,
-                fontSize: 12,
-              }}
-            >
-              {report.status === 'ready' ? 'Ready' : 'Draft'} &middot;{' '}
-              {participant?.reportDate ?? ''}
-            </span>
+        {/* Main content */}
+        <div className="tn-ws-main">
+          {/* Page-level breadcrumb (Topbar is global). Kept narrow:
+              report context + a single primary action. The dead Find button
+              and the duplicate Reports link were removed (QA review). */}
+          <div className="tn-ws-topbar">
+            <div className="tn-ws-crumbs">
+              <Button
+                variant="ghost"
+                size="xs"
+                style={{ marginRight: 4 }}
+                onClick={() => router.push('/reports')}
+              >
+                <ChevronLeft size={13} /> Reports
+              </Button>
+              <b>{participant?.name ?? 'Report'}</b>
+              <span
+                style={{
+                  color: 'var(--tn-muted-3)',
+                  marginLeft: 6,
+                  fontSize: 12,
+                }}
+              >
+                {report.status === 'ready' ? 'Ready' : 'Draft'}
+                {participant?.reportDate ? ` · ${participant.reportDate}` : ''}
+              </span>
+            </div>
+            <div className="tn-ws-top-actions">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={handleRunReview}
+                disabled={isReviewing}
+              >
+                <Shield size={13} /> {isReviewing ? 'Reviewing...' : 'NDIS Review'}
+              </Button>
+            </div>
           </div>
-          <div className="tn-ws-top-actions">
-            <Button variant="ghost" size="xs">
-              <Search size={13} /> Find
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleRunReview}
-              disabled={isReviewing}
-            >
-              <Shield size={13} /> {isReviewing ? 'Reviewing...' : 'NDIS Review'}
-            </Button>
-          </div>
-        </div>
         {reviewError && (
           <div className="tn-ws-error" role="status">
             {reviewError}
@@ -401,13 +394,16 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
           </div>
         </div>
 
-        {/* Footer */}
-        <WorkspaceFooter
-          saving={saveStatus === 'saving'}
-          onExportDocx={handleExportDocx}
-          onRunReview={handleRunReview}
-          reviewing={isReviewing}
-        />
+          {/* Footer */}
+          <WorkspaceFooter
+            saveStatus={saveStatus}
+            saveError={lastError}
+            onRetrySave={retrySave}
+            onExportDocx={handleExportDocx}
+            onRunReview={handleRunReview}
+            reviewing={isReviewing}
+          />
+        </div>
       </div>
     </div>
   )

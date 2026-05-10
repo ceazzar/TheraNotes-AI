@@ -27,9 +27,9 @@ Single repo, single deploy. No separate backend service.
 │  └─ /settings       (upload exemplars)           │
 │                                                  │
 │  API Routes:                                     │
-│  ├─ /api/chat       (conversational, gpt-5.4)    │
-│  ├─ /api/generate   (report gen, gpt-5.4-pro)             │
-│  ├─ /api/revise     (section revision, gpt-5.4-pro)       │
+│  ├─ /api/chat       (conversational, gpt-5.5)    │
+│  ├─ /api/generate   (report gen, gpt-5.5)             │
+│  ├─ /api/revise     (section revision, gpt-5.5)       │
 │  └─ /api/ingest     (parse + embed uploads)      │
 │                                                  │
 └───────────────────┬─────────────────────────────┘
@@ -48,7 +48,7 @@ Single repo, single deploy. No separate backend service.
 └───────────────────┬─────────────────────────────┘
                     │
               OpenAI API
-         gpt-5.4-pro (generation) + gpt-5.4 (chat)
+         gpt-5.5 (generation) + gpt-5.5 (chat)
 ```
 
 ### Tech Stack
@@ -58,14 +58,14 @@ Single repo, single deploy. No separate backend service.
 - **Database:** Supabase PostgreSQL + pgvector extension (Pro plan — free tier auto-pauses after 7 days inactivity)
 - **Auth:** Supabase Auth (email/password + magic links)
 - **Storage:** Supabase Storage (raw uploaded files)
-- **AI:** OpenAI — gpt-5.4 for chat (highest available), gpt-5.4-pro for report generation/revision
+- **AI:** OpenAI — gpt-5.5 for chat (highest available), gpt-5.5 for report generation/revision
 - **Deployment:** Vercel (single project)
 
 ---
 
 ## Two AI Layers
 
-### Chat Agent (gpt-5.4)
+### Chat Agent (gpt-5.5)
 
 The conversational layer. Handles all user interaction:
 
@@ -78,7 +78,7 @@ The conversational layer. Handles all user interaction:
 
 The chat agent is a **router, not the generator**. It never writes report content directly. When generation or revision is needed, it calls the proven fca-agent pipeline.
 
-### Generation Engine (gpt-5.4-pro)
+### Generation Engine (gpt-5.5)
 
 The generation layer. Called by the chat agent as a tool:
 
@@ -250,17 +250,17 @@ The conversational endpoint. Streaming response.
 - Receives: `{ sessionId, message }`
 - Authenticates via Supabase JWT
 - Loads chat history from `messages` table
-- Calls gpt-5.4 with:
+- Calls gpt-5.5 with:
   - System prompt defining the FCA assistant role
   - Chat history
   - Available tools: `generate_report`, `revise_section`, `get_report_status`
 - When the model calls `generate_report`:
   - Extracts clinical notes from the conversation
-  - Calls the generation pipeline (gpt-5.4-pro)
+  - Calls the generation pipeline (gpt-5.5)
   - Streams section progress back to the client
   - Writes completed sections to `reports` table
 - When the model calls `revise_section`:
-  - Calls the revision pipeline (gpt-5.4-pro) for the specific section
+  - Calls the revision pipeline (gpt-5.5) for the specific section
   - Writes revised content to `reports` table
 - Streams assistant response back to client
 - Saves all messages to `messages` table
@@ -269,13 +269,13 @@ The conversational endpoint. Streaming response.
 
 Section-level generation endpoint (called by the chat agent tool once per section).
 
-**Why per-section, not per-report:** Vercel serverless functions have a hard timeout of 300s on Pro tier. A full report has 12+ sections, each taking 1-3 minutes with gpt-5.4-pro. A single function call generating all sections would exceed the timeout. Instead, the chat agent calls `/api/generate` once per section, and the client orchestrates the sequence.
+**Why per-section, not per-report:** Vercel serverless functions have a hard timeout of 300s on Pro tier. A full report has 12+ sections, each taking 1-3 minutes with gpt-5.5. A single function call generating all sections would exceed the timeout. Instead, the chat agent calls `/api/generate` once per section, and the client orchestrates the sequence.
 
 - Receives: `{ sessionId, reportId, sectionId, clinicalNotes, questionnaireData? }`
 - Loads `canonical_template.json` for the target section's structure
 - Queries foundational + user exemplar chunks via pgvector for this section
 - Builds prompt using ported `prompts.ts` templates
-- Calls gpt-5.4-pro for generation (streaming response)
+- Calls gpt-5.5 for generation (streaming response)
 - Writes completed section to `reports.sections` JSONB
 - Returns: `{ sectionId, content, insufficientData? }`
 
@@ -285,7 +285,7 @@ The chat agent orchestrates the full report by calling this endpoint for each se
 
 - Receives: `{ reportId, action: 'coherence_check' }`
 - Loads all completed sections from `reports.sections`
-- Runs coherence check prompt via gpt-5.4-pro
+- Runs coherence check prompt via gpt-5.5
 - Updates `reports.coherence_result` and `reports.insufficient_data_flags`
 - Returns: `{ coherenceResult, insufficientDataFlags }`
 
@@ -295,7 +295,7 @@ Section revision endpoint (called by the chat agent tool).
 
 - Receives: `{ reportId, sectionId, feedback }`
 - Loads current report sections
-- Calls revision pipeline (gpt-5.4-pro) with:
+- Calls revision pipeline (gpt-5.5) with:
   - The section to revise
   - Full report context
   - User feedback
@@ -342,8 +342,8 @@ The core engine logic is preserved exactly. The only change is the execution env
 2. **Settings** → Upload 2-3 previous FCA reports for writing style ingestion
 3. **New session** → Click "New Chat" or similar
 4. **Paste clinical notes** → User pastes their raw clinical notes into the chat
-5. **AI asks follow-ups** → Chat agent (gpt-5.4) asks clarifying questions about the client
-6. **Generation** → When enough context exists, chat agent calls the generation pipeline (gpt-5.4-pro)
+5. **AI asks follow-ups** → Chat agent (gpt-5.5) asks clarifying questions about the client
+6. **Generation** → When enough context exists, chat agent calls the generation pipeline (gpt-5.5)
 7. **Report appears** → Side panel populates section by section as generation progresses
 8. **Review + revise** → User reads sections, clicks to edit directly or clicks "Revise" to give feedback via chat
 9. **Section targeting** → Clicking a section in the side panel links the chat to that section. User says "make this more strengths-based" and the revision pipeline regenerates just that section
@@ -353,7 +353,7 @@ The core engine logic is preserved exactly. The only change is the execution env
 
 ## What's New (Not in fca-agent)
 
-- Chat agent layer (conversational UX via gpt-5.4)
+- Chat agent layer (conversational UX via gpt-5.5)
 - Per-user writing style RAG layer
 - Side panel report editor with direct editing
 - Section-chat linking (click section → chat focuses on it)
@@ -384,7 +384,7 @@ The core engine logic is preserved exactly. The only change is the execution env
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public/anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-side only — for admin operations (ingesting foundational exemplars, bypassing RLS) |
-| `OPENAI_API_KEY` | OpenAI API key for gpt-5.4 and gpt-5.4-pro |
+| `OPENAI_API_KEY` | OpenAI API key for gpt-5.5 and gpt-5.5 |
 
 ---
 

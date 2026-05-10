@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -26,6 +27,21 @@ export function UserMenu() {
   }, [supabase])
 
   const handleSignOut = useCallback(async () => {
+    // Round-2 NEW-9: clear any in-progress drafts (which may contain PHI)
+    // from localStorage on logout. Belt-and-braces alongside the per-key
+    // 24h TTL inside useFormDraft.
+    if (typeof window !== 'undefined') {
+      try {
+        const toRemove: string[] = []
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i)
+          if (k && k.startsWith('theranotes:')) toRemove.push(k)
+        }
+        for (const k of toRemove) window.localStorage.removeItem(k)
+      } catch {
+        // localStorage may be denied (private mode, quota); ignore.
+      }
+    }
     await supabase.auth.signOut()
     router.replace('/login')
     router.refresh()
@@ -42,10 +58,15 @@ export function UserMenu() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" sideOffset={8}>
-        <DropdownMenuLabel className="flex items-center gap-2 font-normal">
-          <User size={14} />
-          <span className="text-xs">{email ?? 'Unknown user'}</span>
-        </DropdownMenuLabel>
+        {/* DropdownMenuLabel wraps Base UI MenuPrimitive.GroupLabel which requires
+            a parent MenuGroup context — without this wrapper, the menu throws
+            "MenuGroupRootContext is missing" on open. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex items-center gap-2 font-normal">
+            <User size={14} />
+            <span className="text-xs">{email ?? 'Unknown user'}</span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
 

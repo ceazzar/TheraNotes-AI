@@ -24,32 +24,38 @@ export async function queryRag(params: {
     userLimit = 3,
   } = params
 
-  try {
-    const embedding = await embedText(queryText)
-    const supabase = await createServiceClient()
-    const embeddingStr = `[${embedding.join(',')}]`
+  const embedding = await embedText(queryText)
+  const supabase = await createServiceClient()
+  const embeddingStr = `[${embedding.join(',')}]`
 
-    const [foundationalResult, userResult] = await Promise.all([
-      supabase.rpc('match_exemplar_chunks', {
-        query_embedding: embeddingStr,
-        match_count: foundationalLimit,
-        filter_user_id: null,
-        filter_section: sectionFilter ?? null,
-      }),
-      supabase.rpc('match_exemplar_chunks', {
-        query_embedding: embeddingStr,
-        match_count: userLimit,
-        filter_user_id: userId,
-        filter_section: sectionFilter ?? null,
-      }),
-    ])
+  const [foundationalResult, userResult] = await Promise.all([
+    supabase.rpc('match_exemplar_chunks', {
+      query_embedding: embeddingStr,
+      match_count: foundationalLimit,
+      filter_user_id: null,
+      filter_section: sectionFilter ?? null,
+    }),
+    supabase.rpc('match_exemplar_chunks', {
+      query_embedding: embeddingStr,
+      match_count: userLimit,
+      filter_user_id: userId,
+      filter_section: sectionFilter ?? null,
+    }),
+  ])
 
-    return {
-      foundational: (foundationalResult.data ?? []).map(mapChunk),
-      userStyle: (userResult.data ?? []).map(mapChunk),
-    }
-  } catch {
-    return { foundational: [], userStyle: [] }
+  // Surface Supabase errors instead of silently returning zero exemplars.
+  // A silent RAG failure means reports get generated with no exemplar context,
+  // producing generic-sounding output and hiding broken infra from the dev.
+  if (foundationalResult.error) {
+    throw new Error(`RAG foundational query failed: ${foundationalResult.error.message}`)
+  }
+  if (userResult.error) {
+    throw new Error(`RAG user-style query failed: ${userResult.error.message}`)
+  }
+
+  return {
+    foundational: (foundationalResult.data ?? []).map(mapChunk),
+    userStyle: (userResult.data ?? []).map(mapChunk),
   }
 }
 

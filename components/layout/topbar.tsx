@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Sparkles } from 'lucide-react'
+import { Stethoscope } from 'lucide-react'
 import { UserMenu } from './user-menu'
 
 const navItems = [
@@ -18,7 +18,7 @@ export function Topbar() {
     <header className="tn-topbar">
       <Link href="/generate" className="tn-brand">
         <span className="tn-brand-mark">
-          <Sparkles size={16} />
+          <Stethoscope size={16} />
         </span>
         TheraNotes
       </Link>

@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   const userId = user.id
 
   const result = streamText({
-    model: openai('gpt-4o'),
+    model: openai(process.env.CHAT_MODEL || 'gpt-5.5'),
     system: contextPrompt,
     messages: modelMessages,
     toolChoice: 'auto',

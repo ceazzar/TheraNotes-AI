@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+tests/e2e/output/
+
+# stray local artifacts
+/x
 
 # next.js
 /.next/

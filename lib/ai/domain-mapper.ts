@@ -32,6 +32,8 @@ export interface Assessment {
   standardized_scores: Record<string, unknown>
   clinical_notes: string
   domain_status: Record<string, unknown>
+  intake_metadata: Record<string, unknown>
+  ndis_goals: string[]
   created_at: string
   updated_at: string
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateSection, runCoherenceCheck, type Assessment } from '@/lib/ai/generate'
+import { fetchProfile } from '@/lib/profile'
 
 export const maxDuration = 300
 
@@ -155,11 +156,22 @@ export async function POST(request: NextRequest) {
     correctionContext = `\n\nPATTERNS TO AVOID (based on past clinician corrections for this section):\n${patterns}\n\nApply these corrections proactively — do not repeat the same issues.`
   }
 
+  // Profile is best-effort: a missing profile is fine (Header simply uses
+  // INSUF markers for unsupplied fields). Don't fail the section on a fetch
+  // error — log and continue with a null profile.
+  let profile = null
+  try {
+    profile = await fetchProfile(supabase, user.id)
+  } catch (err) {
+    console.error('[generate] profile fetch failed', err)
+  }
+
   let result
   try {
     result = await generateSection({
       sectionId,
       ...(assessment ? { assessment } : { clinicalNotes: (clinicalNotes ?? '') + correctionContext }),
+      profile,
       userId: user.id,
       reportId: currentReportId,
       assessmentId: assessmentId ?? undefined,
@@ -182,7 +194,12 @@ export async function POST(request: NextRequest) {
 
   const updatedSections = {
     ...existingSections,
-    [result.sectionId]: { title: result.title, content: result.content },
+    [result.sectionId]: {
+      title: result.title,
+      content: result.content,
+      status: result.status,
+      ...(result.missing ? { missing: result.missing } : {}),
+    },
   }
   await supabase
     .from('reports')
@@ -191,7 +208,11 @@ export async function POST(request: NextRequest) {
     .eq('user_id', user.id)
 
   return NextResponse.json({
-    reportId: currentReportId, sectionId: result.sectionId,
-    content: result.content, insufficientData: result.insufficientData,
+    reportId: currentReportId,
+    sectionId: result.sectionId,
+    content: result.content,
+    insufficientData: result.insufficientData,
+    status: result.status,
+    missing: result.missing,
   })
 }

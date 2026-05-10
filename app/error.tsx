@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +19,7 @@ export default function Error({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4">
-      <Sparkles size={24} className="text-muted-foreground" />
+      <AlertTriangle size={24} className="text-amber-600" />
       <h1 className="text-xl font-semibold text-foreground">
         Something went wrong
       </h1>
