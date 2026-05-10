@@ -1115,7 +1115,9 @@ export default function GeneratePage() {
               aria-label={`Generate ${sectionsThatWillGenerate} sections`}
               title={`Generate ${sectionsThatWillGenerate} of 8 sections`}
             >
-              Generate {sectionsThatWillGenerate || ''} {sectionsThatWillGenerate === 1 ? 'section' : 'sections'}
+              {sectionsThatWillGenerate > 0
+                ? `Generate ${sectionsThatWillGenerate} ${sectionsThatWillGenerate === 1 ? 'section' : 'sections'}`
+                : 'Generate sections'}
               <ArrowUp size={14} />
             </Button>
           </div>

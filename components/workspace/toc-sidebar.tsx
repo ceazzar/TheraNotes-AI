@@ -2,7 +2,6 @@
 
 import { ListTree, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import type { Flag, ReportSection } from "@/lib/workspace/types";
 
 interface TocSidebarProps {
@@ -48,13 +47,20 @@ export function TocSidebar({
 
       {!collapsed && (
         <>
-          {/* Draft progress */}
+          {/* Draft progress — bespoke bar so the workspace sidebar stays on the
+              tn-* token system rather than inheriting shadcn's primary blue. */}
           <div className="tn-side-progress">
             <div className="tn-side-progress-lbl">
               <span>Draft progress</span>
               <b>{progressPct}%</b>
             </div>
-            <Progress value={progressPct} className="h-[3px]" />
+            <div className="tn-side-progress-bar">
+              <div
+                className="tn-side-progress-fill"
+                data-complete={progressPct >= 100 ? "true" : undefined}
+                style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
+              />
+            </div>
           </div>
 
           {/* Table of contents */}

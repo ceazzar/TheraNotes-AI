@@ -37,7 +37,7 @@ export function WorkspaceFooter({
       ) : (
         <span className="tn-saved" data-status={saveStatus}>
           <span className="tn-saved-dot" />
-          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Idle'}
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
         </span>
       )}
 

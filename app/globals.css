@@ -625,6 +625,26 @@
   transform: translateY(-1px);
 }
 
+/* Round-3 VC-R-3: Generate button shipped labeled (round-2 NEW-3) but kept
+   shadcn's bg-primary, painting a 4th blue against the rest of the app's
+   tn-accent. Mirror the .tn-auth-submit override pattern so the marquee
+   $$ action paints the same accent as login submit. */
+.tn-generate-btn {
+  background: var(--tn-accent) !important;
+  color: #fff !important;
+  border-radius: var(--tn-radius-pill);
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+}
+.tn-generate-btn:hover:not(:disabled) {
+  background: var(--tn-accent-ink) !important;
+}
+.tn-generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .tn-gen-helpers {
   display: flex;
   align-items: center;
@@ -1085,8 +1105,11 @@
 }
 .tn-side-progress-fill {
   height: 100%;
-  background: var(--tn-ok);
+  background: var(--tn-ink);
   transition: width 0.4s;
+}
+.tn-side-progress-fill[data-complete="true"] {
+  background: var(--tn-ok);
 }
 
 .tn-side-toc {
@@ -1769,9 +1792,12 @@
   border-radius: 50%;
   background: var(--tn-ok);
 }
-.tn-saved[data-saving="true"] .tn-saved-dot {
+.tn-saved[data-status="saving"] .tn-saved-dot {
   background: var(--tn-muted-3);
   animation: tn-pulse-dot 1s infinite;
+}
+.tn-saved[data-status="error"] .tn-saved-dot {
+  background: var(--tn-crit);
 }
 .tn-footer-actions {
   display: flex;
