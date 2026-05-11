@@ -16,6 +16,8 @@ tests/e2e/output/
 
 # stray local artifacts
 /x
+UI-UX/round-3/screenshots/
+UI-UX/round-4/
 
 # next.js
 /.next/
