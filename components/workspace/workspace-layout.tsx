@@ -286,7 +286,6 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     setResumeError(null)
 
     const total = missingSections.length
-    const accumulated: Sections = { ...report.sections }
 
     try {
       for (let i = 0; i < missingSections.length; i++) {
@@ -312,27 +311,12 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
           )
         }
 
-        const data = (await response.json()) as {
-          sectionId: string
-          content: string
-        }
-        accumulated[data.sectionId] = {
-          title: data.sectionId,
-          content: data.content,
-        }
+        // Response body is intentionally not unpacked: the API already
+        // wrote the section to the DB at line 204-208 of
+        // app/api/generate/route.ts. We just need a successful return
+        // before moving to the next section.
+        await response.json().catch(() => null)
       }
-
-      // Loop succeeded. Roll the editor + report state forward without a
-      // page reload so the user sees the new sections immediately.
-      const { value, sectionKeys: keys } = reportToPlate(accumulated)
-      setPlateValue(value)
-      setSectionKeys(keys)
-      setTocSections(
-        keys.map((k) => ({ id: k, title: accumulated[k]?.title ?? k })),
-      )
-      setReport((prev) =>
-        prev ? { ...prev, sections: accumulated, status: 'ready' } : prev,
-      )
 
       // Server already wrote the sections per-call; explicitly flip the
       // report status back to 'ready' to clear the failed flag from the
@@ -345,6 +329,15 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
           .eq('id', report.id)
           .eq('user_id', user.id)
       }
+
+      // usePlateEditor in plate-editor.tsx defaults `deps = []`, so the
+      // editor instance is memoized once at mount and won't pick up the
+      // new sections from a setPlateValue call alone. Refresh the route
+      // so the workspace re-mounts with the updated report.sections from
+      // the database. This is the simplest correct fix; the alternative
+      // (calling editor.tf.setValue via the ref) would also flush the
+      // history stack, which we want to preserve for the new content.
+      router.refresh()
     } catch (err) {
       setResumeError(
         err instanceof Error ? err.message : 'Failed to resume generation',
