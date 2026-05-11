@@ -10,7 +10,6 @@ import type { ClinicianProfile } from '@/lib/profile'
 import {
   getAvailableIntake,
   missingFromRequires,
-  readIntakeMetadata,
   type IntakeBucket,
 } from '@/lib/ai/intake'
 import { buildHeaderTable } from '@/lib/ai/header'

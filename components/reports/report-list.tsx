@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
@@ -42,11 +42,22 @@ export function ReportList() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const searchDebounceMountedRef = useRef(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    if (!searchDebounceMountedRef.current) {
+      searchDebounceMountedRef.current = true
+      return
+    }
+    const t = setTimeout(() => {
+      setReports([])
+      setPage(0)
+      setHasMore(false)
+      setLoading(true)
+      setDebouncedSearch(search)
+    }, 250)
     return () => clearTimeout(t)
   }, [search])
 
@@ -55,7 +66,6 @@ export function ReportList() {
   // than browse it; load-more is more discoverable and predictable.
   useEffect(() => {
     let isActive = true
-    setLoading(true)
 
     // Defense-in-depth: require an authenticated user AND filter by user_id
     // explicitly, even though RLS is enforced. This mirrors the workspace
@@ -129,12 +139,12 @@ export function ReportList() {
     }
   }, [supabase, page, statusFilter, debouncedSearch])
 
-  // Reset to page 0 whenever filter or search changes (search switches the
-  // fetch into a single big window, so we need to re-fetch when it toggles).
-  useEffect(() => {
+  const resetListForFilterChange = useCallback(() => {
     setPage(0)
     setReports([])
-  }, [statusFilter, debouncedSearch])
+    setHasMore(false)
+    setLoading(true)
+  }, [])
 
   // Client-side search across the loaded page set. For larger datasets a
   // server-side ilike on participant_name would be a follow-up.
@@ -215,7 +225,11 @@ export function ReportList() {
         <div className="w-full sm:w-48">
           <Select
             value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+            onValueChange={(v) => {
+              if (v === statusFilter) return
+              resetListForFilterChange()
+              setStatusFilter(v as StatusFilter)
+            }}
             placeholder="All statuses"
             aria-label="Filter by status"
           >
@@ -284,7 +298,10 @@ export function ReportList() {
                 variant="outline"
                 size="sm"
                 disabled={loading}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => {
+                  setLoading(true)
+                  setPage((p) => p + 1)
+                }}
               >
                 {loading ? 'Loading…' : 'Load more'}
               </Button>

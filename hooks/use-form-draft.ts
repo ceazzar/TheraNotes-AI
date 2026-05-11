@@ -73,12 +73,18 @@ export function useFormDraft<T>({
 }: UseFormDraftOptions<T>): { clear: () => void } {
   const restoredRef = useRef(false)
   const onRestoreRef = useRef(onRestore)
-  onRestoreRef.current = onRestore
   const redactRef = useRef(redact)
-  redactRef.current = redact
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const key = userId ? `${storageKey}:${userId}` : null
+
+  useEffect(() => {
+    onRestoreRef.current = onRestore
+  }, [onRestore])
+
+  useEffect(() => {
+    redactRef.current = redact
+  }, [redact])
 
   // Restore once on mount (and again if userId becomes known).
   useEffect(() => {

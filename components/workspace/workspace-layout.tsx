@@ -346,7 +346,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
       setIsResuming(false)
       setResumeProgress(null)
     }
-  }, [report, missingSections, isResuming, supabase])
+  }, [report, missingSections, isResuming, router, supabase])
 
   const handleExportDocx = useCallback(async () => {
     const editor = editorRef.current?.editor
