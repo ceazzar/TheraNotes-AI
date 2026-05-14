@@ -363,14 +363,10 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         throw new Error(errData.error || 'Failed to finalise resumed report')
       }
 
-      // usePlateEditor in plate-editor.tsx defaults `deps = []`, so the
-      // editor instance is memoized once at mount and won't pick up the
-      // new sections from a setPlateValue call alone. Refresh the route
-      // so the workspace re-mounts with the updated report.sections from
-      // the database. This is the simplest correct fix; the alternative
-      // (calling editor.tf.setValue via the ref) would also flush the
-      // history stack, which we want to preserve for the new content.
-      router.refresh()
+      // The Plate editor is memoized after mount. A Next router refresh can
+      // preserve this client state, so reload the page to remount the editor
+      // with the newly persisted report sections.
+      window.location.reload()
     } catch (err) {
       setResumeError(
         err instanceof Error ? err.message : 'Failed to resume generation',
@@ -379,7 +375,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
       setIsResuming(false)
       setResumeProgress(null)
     }
-  }, [report, missingSections, isResuming, router])
+  }, [report, missingSections, isResuming])
 
   const handleStandardisedFinalise = useCallback(async (files: File[]) => {
     if (!report || !report.assessment_id || files.length === 0 || isFinalisingAssessments) {
@@ -478,7 +474,9 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         .eq('id', report.assessment_id)
         .eq('user_id', user.id)
 
-      router.refresh()
+      // See handleResume: remount the client editor so the regenerated Part D
+      // and final Part E are visible immediately after standardised evidence.
+      window.location.reload()
     } catch (err) {
       setFinaliseError(
         err instanceof Error ? err.message : 'Failed to finalise assessment sections',
@@ -492,7 +490,6 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     isFinalisingAssessments,
     saveToSupabase,
     supabase,
-    router,
   ])
 
   const handleExportDocx = useCallback(async () => {
