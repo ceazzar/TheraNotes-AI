@@ -50,6 +50,7 @@ interface Report {
   status: string
   assessment_id: string | null
   planner_review: { flags?: PlannerFlag[] } | null
+  updated_at: string | null
 }
 
 interface PlannerFlag {
@@ -135,7 +136,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
       }
       const { data: reportData } = await supabase
         .from('reports')
-        .select('id, sections, status, assessment_id, planner_review')
+        .select('id, sections, status, assessment_id, planner_review, updated_at')
         .eq('id', reportId)
         .eq('user_id', user.id)
         .single()
@@ -152,6 +153,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         status: reportData.status,
         assessment_id: reportData.assessment_id,
         planner_review: reportData.planner_review as Report['planner_review'],
+        updated_at: (reportData as { updated_at?: string | null }).updated_at ?? null,
       }
       setReport(r)
 
@@ -302,7 +304,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   const canResume =
     !!report &&
     !!report.assessment_id &&
-    report.status === 'failed' &&
+    (report.status === 'failed' || report.status === 'generating') &&
     Object.keys(report.sections).length > 0 &&
     missingSections.length > 0
 
@@ -353,6 +355,11 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
           .from('reports')
           .update({ status: 'ready' })
           .eq('id', report.id)
+          .eq('user_id', user.id)
+        await supabase
+          .from('assessments')
+          .update({ status: 'complete' })
+          .eq('id', report.assessment_id)
           .eq('user_id', user.id)
       }
 
@@ -703,7 +710,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
                     ? resumeProgress
                       ? `Generating ${resumeProgress.sectionName} (${resumeProgress.current} of ${resumeProgress.total})…`
                       : 'Resuming generation…'
-                    : `This report stopped with ${
+                    : `This report is incomplete with ${
                         Object.keys(report.sections).length
                       } of ${RESUMABLE_SECTIONS.length} sections complete.`}
                 </div>

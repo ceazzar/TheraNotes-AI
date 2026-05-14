@@ -837,6 +837,9 @@ export default function GeneratePage() {
     setIsDone(false)
     setShowValidation(false)
 
+    let createdAssessmentId: string | null = null
+    let currentReportId: string | null = null
+
     try {
       const {
         data: { user },
@@ -975,8 +978,8 @@ export default function GeneratePage() {
         setIsGenerating(false)
         return
       }
+      createdAssessmentId = assessment.id
 
-      let currentReportId: string | null = null
       const accumulatedSections: Sections = {}
 
       for (let i = 0; i < generatableSections.length; i++) {
@@ -1049,6 +1052,18 @@ export default function GeneratePage() {
       clearDraft()
       setIsDone(true)
     } catch (err) {
+      if (currentReportId) {
+        await supabase
+          .from('reports')
+          .update({ status: 'failed' })
+          .eq('id', currentReportId)
+      }
+      if (createdAssessmentId) {
+        await supabase
+          .from('assessments')
+          .update({ status: 'failed' })
+          .eq('id', createdAssessmentId)
+      }
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred.'
       )
@@ -1136,19 +1151,20 @@ export default function GeneratePage() {
         <Topbar />
         <div ref={topRef} />
 
-        {isDone && (
+        {(isDone || error) && (
           <div className="mx-auto mb-6 mt-6 max-w-[800px] px-4">
             <div
               className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
               style={{
-                background: 'var(--tn-ok-bg)',
-                border: '1px solid var(--tn-ok-line)',
-                color: 'var(--tn-ok)',
+                background: isDone ? 'var(--tn-ok-bg)' : 'var(--tn-warn-bg)',
+                border: `1px solid ${isDone ? 'var(--tn-ok-line)' : 'var(--tn-warn-line)'}`,
+                color: isDone ? 'var(--tn-ok)' : 'var(--tn-warn)',
               }}
             >
-              <CheckCircle2 className="size-4" />
-              Report generated successfully. Review the document below and
-              download when ready.
+              {isDone ? <CheckCircle2 className="size-4" /> : <AlertTriangle className="size-4" />}
+              {isDone
+                ? 'Report generated successfully. Review the document below and download when ready.'
+                : `Generation stopped after saving a partial draft. ${error ?? 'Open the workspace to resume the remaining sections.'}`}
             </div>
           </div>
         )}
@@ -1157,7 +1173,7 @@ export default function GeneratePage() {
           <FormattedReport sections={sections} />
         </div>
 
-        {isDone && (
+        {(isDone || reportId) && (
           <div
             className="fixed bottom-0 left-0 right-0 z-50"
             style={{
@@ -1183,10 +1199,10 @@ export default function GeneratePage() {
                     className="text-sm transition-colors"
                     style={{ color: 'var(--tn-muted-1)' }}
                   >
-                    Open in workspace
+                    {isDone ? 'Open in workspace' : 'Open partial workspace'}
                   </Link>
                 )}
-                <ExportButton sections={sections} />
+                {isDone && <ExportButton sections={sections} />}
               </div>
             </div>
           </div>
