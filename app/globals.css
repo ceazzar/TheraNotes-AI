@@ -978,6 +978,15 @@ button.tn-create-draft-btn[disabled]:hover {
   gap: 8px;
   margin-top: 12px;
 }
+.tn-recent-empty {
+  padding: 12px;
+  border: 1px dashed var(--tn-entry-line);
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: var(--tn-muted-1);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
 .tn-recent-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;

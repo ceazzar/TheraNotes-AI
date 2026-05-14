@@ -54,6 +54,17 @@ interface ParsedStandardisedPayload {
 
 type GenerationMode = 'first_draft' | 'full_report'
 
+interface RecentReport {
+  id: string
+  status: string
+  sections: Sections | null
+  updated_at: string
+  assessments:
+    | { participant_name: string | null }[]
+    | { participant_name: string | null }
+    | null
+}
+
 const ASSESSMENT_CONTEXT_CHIPS = [
   'In-person',
   'Telehealth',
@@ -125,6 +136,41 @@ function normaliseGenerationMode(value: unknown): GenerationMode {
   return value === 'full_report' || value === 'finalise'
     ? 'full_report'
     : 'first_draft'
+}
+
+function getRecentReportName(report: RecentReport): string {
+  const assessment = Array.isArray(report.assessments)
+    ? report.assessments[0]
+    : report.assessments
+  return assessment?.participant_name?.trim() || 'Untitled FCA report'
+}
+
+function getReportInitials(name: string): string {
+  const words = name
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+  if (words.length === 0) return 'F'
+  return words.slice(0, 2).map((word) => word[0]).join('').toUpperCase()
+}
+
+function getRecentReportSummary(report: RecentReport): string {
+  const sectionCount = report.sections ? Object.keys(report.sections).length : 0
+  const updated = `updated ${formatRelativeTime(new Date(report.updated_at))}`
+  if (report.status === 'ready') {
+    return `Ready · ${sectionCount || 'no'} section${sectionCount === 1 ? '' : 's'} · ${updated}`
+  }
+  if (report.status === 'generating') {
+    return `Generating · ${updated}`
+  }
+  if (report.status === 'failed') {
+    return sectionCount > 0
+      ? `Needs attention · ${sectionCount} section${sectionCount === 1 ? '' : 's'} saved · ${updated}`
+      : `Generation failed · ${updated}`
+  }
+  return sectionCount > 0
+    ? `Draft · ${sectionCount} section${sectionCount === 1 ? '' : 's'} saved · ${updated}`
+    : `Draft workspace · ${updated}`
 }
 
 const SENSORY_OPTIONS = [
@@ -259,6 +305,8 @@ function FirstDraftEntry({
   clinicalNotes,
   setClinicalNotes,
   assessmentContext,
+  recentReports,
+  recentReportsLoading,
   toggleContext,
   draftSavedAt,
   onCreate,
@@ -270,6 +318,8 @@ function FirstDraftEntry({
   clinicalNotes: string
   setClinicalNotes: (value: string) => void
   assessmentContext: string[]
+  recentReports: RecentReport[]
+  recentReportsLoading: boolean
   toggleContext: (value: string) => void
   draftSavedAt: Date | null
   onCreate: () => void
@@ -380,22 +430,31 @@ function FirstDraftEntry({
               <p>Open an existing draft to add assessments or finalise.</p>
             </div>
             <div className="tn-recent-list">
-              <Link href="/reports" className="tn-recent-row">
-                <span className="ini">LB</span>
-                <span>
-                  <b>Luka B. (sample)</b>
-                  <small>Stage 1 · first draft ready, resume to add assessments</small>
-                </span>
-                <ArrowRight size={14} />
-              </Link>
-              <Link href="/reports" className="tn-recent-row">
-                <span className="ini">MH</span>
-                <span>
-                  <b>Morgan H. (sample)</b>
-                  <small>Stage 1 · awaiting OT review of clinical draft</small>
-                </span>
-                <ArrowRight size={14} />
-              </Link>
+              {recentReportsLoading ? (
+                <div className="tn-recent-empty">Loading recent work...</div>
+              ) : recentReports.length > 0 ? (
+                recentReports.map((report) => {
+                  const name = getRecentReportName(report)
+                  return (
+                    <Link
+                      key={report.id}
+                      href={`/reports/${report.id}`}
+                      className="tn-recent-row"
+                    >
+                      <span className="ini">{getReportInitials(name)}</span>
+                      <span>
+                        <b>{name}</b>
+                        <small>{getRecentReportSummary(report)}</small>
+                      </span>
+                      <ArrowRight size={14} />
+                    </Link>
+                  )
+                })
+              ) : (
+                <div className="tn-recent-empty">
+                  No saved report workspaces yet. Create a draft and it will appear here.
+                </div>
+              )}
             </div>
             <button type="button" className="tn-side-link" onClick={onOpenReports}>
               View all reports <ArrowRight size={13} />
@@ -506,6 +565,8 @@ export default function GeneratePage() {
   const [reportId, setReportId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isDone, setIsDone] = useState(false)
+  const [recentReports, setRecentReports] = useState<RecentReport[]>([])
+  const [recentReportsLoading, setRecentReportsLoading] = useState(true)
 
   const reportRef = useRef<HTMLDivElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
@@ -529,6 +590,37 @@ export default function GeneratePage() {
       mounted = false
     }
   }, [supabase])
+
+  useEffect(() => {
+    if (!authReady) return
+
+    let cancelled = false
+    void (async () => {
+      if (!userId) {
+        if (cancelled) return
+        setRecentReports([])
+        setRecentReportsLoading(false)
+        return
+      }
+
+      setRecentReportsLoading(true)
+      try {
+        const { data } = await supabase
+          .from('reports')
+          .select('id, status, sections, updated_at, assessments(participant_name)')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+          .limit(3)
+        if (!cancelled) setRecentReports((data ?? []) as unknown as RecentReport[])
+      } finally {
+        if (!cancelled) setRecentReportsLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authReady, userId, supabase])
 
   // Auto-fill assessor + clinic fields from the clinician profile, but only
   // for fields the user hasn't typed into. Functional setters with empty
@@ -557,7 +649,10 @@ export default function GeneratePage() {
   // Banner shown briefly when an existing draft is restored from localStorage.
   const [restoredAt, setRestoredAt] = useState<Date | null>(null)
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null)
-  const dismissRestoredBanner = useCallback(() => setRestoredAt(null), [])
+  const dismissRestoredBanner = useCallback(() => {
+    setRestoredAt(null)
+    setShowBanner(false)
+  }, [])
 
   // Snapshot all form fields for the autosave hook. Recomputes on every render
   // — that's fine because the hook itself debounces writes by 400ms.
@@ -1304,6 +1399,8 @@ export default function GeneratePage() {
               setWorkflowStarted(true)
             }}
             assessmentContext={assessmentContext}
+            recentReports={recentReports}
+            recentReportsLoading={recentReportsLoading}
             toggleContext={toggleAssessmentContext}
             draftSavedAt={draftSavedAt}
             onCreate={() => {
