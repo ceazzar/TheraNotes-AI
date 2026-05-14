@@ -377,9 +377,15 @@ async function run() {
   console.log(`  Report:    ${outputPath}`)
   console.log(`  JSON:      ${jsonPath}`)
   console.log()
-  console.log(`Report viewer: ${BASE_URL}/report/${reportId}`)
-  console.log(`Workspace:     ${BASE_URL}/workspace/${reportId}`)
+  console.log(`Workspace: ${BASE_URL}/reports/${reportId}`)
   console.log()
+
+  if (failCount > 0 || successCount !== SECTIONS.length) {
+    throw new Error(
+      `Peter Parker E2E failed: ${successCount}/${SECTIONS.length} sections ready, ${failCount} failed.`,
+    )
+  }
+
   console.log('Done!')
 }
 

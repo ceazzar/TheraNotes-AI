@@ -89,6 +89,18 @@ export function buildSectionGenerationPrompt(
     `\nEXEMPLAR EXAMPLES (for style and structure reference only):\n${exemplarText}`,
   );
 
+  const sectionSpecificRules =
+    sectionName === "Assessment Process"
+      ? "\nASSESSMENT PROCESS STRUCTURE RULE:\n" +
+        "When listing report parts, use these exact part names and order only:\n" +
+        "- Part A: About The Participant\n" +
+        "- Part B: Mental Health And Psychosocial Functioning\n" +
+        "- Part C: Functional Impairments Relating To Disability\n" +
+        "- Part D: Assessment Findings\n" +
+        "- Part E: Summary & Recommendations\n" +
+        "Do not rename the parts based on exemplar wording, and do not place standardised assessment findings in Part C.\n"
+      : "";
+
   return {
     system:
       `You are an expert occupational therapist writing the "${sectionName}" section ` +
@@ -98,6 +110,7 @@ export function buildSectionGenerationPrompt(
       `their daily functioning and to justify ongoing NDIS-funded supports. Every ` +
       `observation must be linked to its functional impact and support needs.\n\n` +
       `SECTION STRUCTURE AND PURPOSE:\n${sectionDescription}\n\n` +
+      sectionSpecificRules +
       `Expected length: ${typicalLength}\n\n` +
       "WRITING STYLE — CRITICAL:\n" +
       "1. Write in third person, professional clinical tone with an advocacy focus.\n" +

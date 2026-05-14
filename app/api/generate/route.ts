@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateSection, runCoherenceCheck, type Assessment } from '@/lib/ai/generate'
 import { fetchProfile } from '@/lib/profile'
+import { reportSectionsToMarkdown, type ReportSectionRecord } from '@/lib/report-sections'
 
 export const maxDuration = 300
 
@@ -22,8 +23,9 @@ export async function POST(request: NextRequest) {
       .single()
     if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
 
-    const fullReport = Object.entries(report.sections as Record<string, { title: string; content: string }>)
-      .map(([, s]) => `## ${s.title}\n\n${s.content}`).join('\n\n')
+    const fullReport = reportSectionsToMarkdown(
+      (report.sections as ReportSectionRecord) ?? {},
+    )
 
     try {
       const coherenceResult = await runCoherenceCheck({ fullReport, clinicalNotes: body.clinicalNotes ?? '', userId: user.id, reportId: body.reportId })
