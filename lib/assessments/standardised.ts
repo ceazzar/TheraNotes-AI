@@ -138,6 +138,38 @@ function parseSensoryProfile({ filename, text }: ParseInput): Record<string, unk
   }
 }
 
+function inferGenericToolName(text: string, filename: string): string {
+  const firstMeaningfulLine = text
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .find((line) => line.length >= 8 && line.length <= 120)
+
+  return (
+    firstMeaningfulLine ??
+    filename
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() ??
+    'Uploaded standardised OT assessment report'
+  )
+}
+
+function parseGenericStandardisedReport({ filename, text }: ParseInput): Record<string, unknown> | null {
+  const sourceContext = compactSourceContext(text)
+  if (sourceContext.length < 120) return null
+  if (!/(assessment|score|standardi[sz]ed|profile|scale|domain|result|report)/i.test(sourceContext)) {
+    return null
+  }
+
+  return {
+    tool: inferGenericToolName(text, filename),
+    source_file: filename,
+    extraction_status: 'source_context_only',
+    source_context_text: sourceContext,
+  }
+}
+
 function getDescriptor(score: Record<string, unknown>, key: string): string | null {
   const row = score[key] as Record<string, unknown> | undefined
   const descriptor = row?.descriptor
@@ -173,6 +205,17 @@ export function parseStandardisedAssessmentText(input: ParseInput): ParsedAssess
     summaries.push(
       `Sensory Profile: Low Registration ${getClassification(quadrants, 'low_registration') ?? 'detected'}, Sensory Sensitivity ${getClassification(quadrants, 'sensory_sensitivity') ?? 'detected'}, Sensation Avoiding ${getClassification(quadrants, 'sensation_avoiding') ?? 'detected'}.`,
     )
+  }
+
+  if (Object.keys(scores).length === 0) {
+    const genericReport = parseGenericStandardisedReport(input)
+    if (genericReport) {
+      scores.standardised_assessment_report = genericReport
+      detectedTools.push('Uploaded standardised OT assessment report')
+      summaries.push(
+        'Standardised assessment report: source context extracted; structured score mapping not available for this tool.',
+      )
+    }
   }
 
   return { scores, detectedTools, summaries }
