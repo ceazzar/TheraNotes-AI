@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   if (body.action === 'coherence_check') {
     const { data: report } = await supabase
       .from('reports')
-      .select('sections')
+      .select('sections, assessment_id')
       .eq('id', body.reportId)
       .eq('user_id', user.id)
       .single()
@@ -32,6 +32,13 @@ export async function POST(request: NextRequest) {
         .update({ coherence_result: coherenceResult, status: 'ready' })
         .eq('id', body.reportId)
         .eq('user_id', user.id)
+      if (report.assessment_id) {
+        await supabase
+          .from('assessments')
+          .update({ status: 'complete' })
+          .eq('id', report.assessment_id)
+          .eq('user_id', user.id)
+      }
       return NextResponse.json({ coherenceResult })
     } catch (err) {
       await supabase
@@ -39,6 +46,13 @@ export async function POST(request: NextRequest) {
         .update({ status: 'failed' })
         .eq('id', body.reportId)
         .eq('user_id', user.id)
+      if (report.assessment_id) {
+        await supabase
+          .from('assessments')
+          .update({ status: 'failed' })
+          .eq('id', report.assessment_id)
+          .eq('user_id', user.id)
+      }
 
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'Failed to run coherence check' },

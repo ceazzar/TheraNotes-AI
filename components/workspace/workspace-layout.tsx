@@ -346,21 +346,21 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         await response.json().catch(() => null)
       }
 
-      // Server already wrote the sections per-call; explicitly flip the
-      // report status back to 'ready' to clear the failed flag from the
-      // reports list and from the workspace header.
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase
-          .from('reports')
-          .update({ status: 'ready' })
-          .eq('id', report.id)
-          .eq('user_id', user.id)
-        await supabase
-          .from('assessments')
-          .update({ status: 'complete' })
-          .eq('id', report.assessment_id)
-          .eq('user_id', user.id)
+      setResumeProgress({ current: total, total, sectionName: 'Final review' })
+      const coherenceResponse = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'coherence_check',
+          reportId: report.id,
+          clinicalNotes: '',
+        }),
+      })
+      if (!coherenceResponse.ok) {
+        const errData = (await coherenceResponse.json().catch(() => ({}))) as {
+          error?: string
+        }
+        throw new Error(errData.error || 'Failed to finalise resumed report')
       }
 
       // usePlateEditor in plate-editor.tsx defaults `deps = []`, so the
@@ -379,7 +379,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
       setIsResuming(false)
       setResumeProgress(null)
     }
-  }, [report, missingSections, isResuming, router, supabase])
+  }, [report, missingSections, isResuming, router])
 
   const handleStandardisedFinalise = useCallback(async (files: File[]) => {
     if (!report || !report.assessment_id || files.length === 0 || isFinalisingAssessments) {
