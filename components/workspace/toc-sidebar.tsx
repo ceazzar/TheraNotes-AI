@@ -41,6 +41,10 @@ function isFinalEvidenceSection(section: ReportSection) {
   )
 }
 
+function isTemplateMetadataSection(section: ReportSection) {
+  return section.title.includes('Report Header / Participant Details')
+}
+
 function StatusGlyph({ status }: { status: SectionDisplayStatus }) {
   if (status === 'reviewed') {
     return <CheckCircle2 size={15} style={{ color: 'var(--tn-ok)' }} />
@@ -93,11 +97,14 @@ export function TocSidebar({
   const liveFlags = flags.filter((f) => !f.resolved)
   const draftSections = sections.filter((section) => !isFinalEvidenceSection(section))
   const finalSections = sections.filter(isFinalEvidenceSection)
+  const clinicalDraftSections = draftSections.filter(
+    (section) => !isTemplateMetadataSection(section),
+  )
   const sectionIds = new Set(sections.map((section) => section.id))
-  const draftedCount = draftSections.filter((section) => touchedSections.has(section.id)).length
-  const remainingCount = Math.max(0, draftSections.length - draftedCount)
-  const draftProgressPct = draftSections.length
-    ? Math.round((draftedCount / draftSections.length) * 100)
+  const draftedCount = clinicalDraftSections.filter((section) => touchedSections.has(section.id)).length
+  const remainingCount = Math.max(0, clinicalDraftSections.length - draftedCount)
+  const draftProgressPct = clinicalDraftSections.length
+    ? Math.round((draftedCount / clinicalDraftSections.length) * 100)
     : progressPct
 
   return (
@@ -119,12 +126,12 @@ export function TocSidebar({
           {/* Draft progress — bespoke bar so the workspace sidebar stays on the
               tn-* token system rather than inheriting shadcn's primary blue. */}
           <div className="tn-side-progress">
-            <div className="tn-side-progress-title">First-draft sections</div>
+            <div className="tn-side-progress-title">Clinical draft sections</div>
             <div className="tn-side-progress-copy">
-              {draftedCount}/{draftSections.length} drafted · {remainingCount} to check
+              {draftedCount}/{clinicalDraftSections.length} drafted · {remainingCount} to check
             </div>
             <div className="tn-side-progress-lbl">
-              <span>Draft progress</span>
+              <span>Clinical progress</span>
               <b>{draftProgressPct}%</b>
             </div>
             <div className="tn-side-progress-bar">
