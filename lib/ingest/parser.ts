@@ -10,6 +10,12 @@ function ensurePdfCanvasGlobals() {
   globalThis.Path2D ??= canvas.Path2D as unknown as typeof Path2D
 }
 
+function configurePdfWorker(PDFParse: typeof import('pdf-parse').PDFParse) {
+  const { CanvasFactory, getData } = require('pdf-parse/worker') as typeof import('pdf-parse/worker')
+  PDFParse.setWorker(getData())
+  return CanvasFactory
+}
+
 export async function parseDocument(buffer: Buffer, filename: string): Promise<string> {
   const ext = filename.split('.').pop()?.toLowerCase()
   if (ext === 'md' || ext === 'txt') return buffer.toString('utf-8')
@@ -22,7 +28,11 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<s
     // Force the Node/CJS export. Next's production bundler can otherwise pick
     // the browser/pdf.js build, which expects DOMMatrix and fails on Vercel.
     const { PDFParse } = require('pdf-parse') as typeof import('pdf-parse')
-    const parser = new PDFParse({ data: new Uint8Array(buffer) })
+    const CanvasFactory = configurePdfWorker(PDFParse)
+    const parser = new PDFParse({
+      data: new Uint8Array(buffer),
+      CanvasFactory,
+    })
     const result = await parser.getText()
     await parser.destroy()
     return result.text
