@@ -156,10 +156,13 @@ export async function generateSection(
     const sectionExpects = sectionTemplate.expected_inputs ?? []
     const augmentations: string[] = []
 
-    if (
-      sectionExpects.includes('standardized_scores') &&
+    const hasStandardizedScores =
       assessment.standardized_scores &&
       Object.keys(assessment.standardized_scores).length > 0
+
+    if (
+      sectionExpects.includes('standardized_scores') &&
+      hasStandardizedScores
     ) {
       augmentations.push(
         `STANDARDISED ASSESSMENT SCORES (cite these directly):\n${JSON.stringify(
@@ -168,6 +171,18 @@ export async function generateSection(
           2,
         )}`,
       )
+    }
+
+    if (sectionTemplate.name === 'Part E: Summary & Recommendations') {
+      if (hasStandardizedScores) {
+        augmentations.push(
+          'PART_E_SCOPE: full_final\nStandardised assessment results are now available. Write the complete Part E, including NDIS Goals, Summary of Functional Impairments, and Recommendations.',
+        )
+      } else {
+        augmentations.push(
+          'PART_E_SCOPE: functional_impairment_summary_only\nStandardised assessment results have not been uploaded yet. Write ONLY the ## Summary of Functional Impairments subsection for the OT review draft. Do not include ## NDIS Goals or ## Recommendations.',
+        )
+      }
     }
 
     if (

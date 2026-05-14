@@ -137,7 +137,10 @@ export async function POST(request: NextRequest) {
     .single()
   const existingSections = (report?.sections ?? {}) as Record<string, { title: string; content: string }>
   const previousSections: Record<string, string> = {}
-  for (const [key, val] of Object.entries(existingSections)) previousSections[key] = val.content
+  for (const [key, val] of Object.entries(existingSections)) {
+    if (key === sectionId || !val.content?.trim()) continue
+    previousSections[key] = val.content
+  }
 
   // Query past corrections for this user and section type to inform generation
   let correctionContext = ''

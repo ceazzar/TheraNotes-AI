@@ -7,7 +7,6 @@ import { Plus, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectItem } from '@/components/ui/select'
 import { ReportCard } from './report-card'
 
 const PAGE_SIZE = 24
@@ -34,6 +33,7 @@ export function ReportList() {
   const [reports, setReports] = useState<ReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [confirmClearFailed, setConfirmClearFailed] = useState(false)
   // Round-3 IA-2: debounce the search term before it hits the Supabase
   // fetch effect. Without this, every keystroke triggers a 500-row, ~350KB
   // Supabase round-trip plus a full grid re-render. 250ms is the sweet
@@ -60,6 +60,13 @@ export function ReportList() {
     }, 250)
     return () => clearTimeout(t)
   }, [search])
+
+  useEffect(() => {
+    if (!confirmClearFailed) return
+
+    const t = window.setTimeout(() => setConfirmClearFailed(false), 3000)
+    return () => window.clearTimeout(t)
+  }, [confirmClearFailed])
 
   // Fetch one page at a time. Pagination is intentionally simple — load-more
   // button rather than infinite scroll, because clinicians scan a list rather
@@ -172,6 +179,11 @@ export function ReportList() {
   ).length
 
   const handleClearFailed = useCallback(async () => {
+    if (!confirmClearFailed) {
+      setConfirmClearFailed(true)
+      return
+    }
+
     const toDelete = reports.filter(
       (r) => r.status === 'failed' && (!r.sections || Object.keys(r.sections).length === 0)
     )
@@ -183,7 +195,8 @@ export function ReportList() {
         (r) => !(r.status === 'failed' && (!r.sections || Object.keys(r.sections).length === 0))
       )
     )
-  }, [reports])
+    setConfirmClearFailed(false)
+  }, [reports, confirmClearFailed])
 
   return (
     <div className="space-y-6">
@@ -197,7 +210,9 @@ export function ReportList() {
               className="text-xs text-muted-foreground"
               onClick={handleClearFailed}
             >
-              Clear {failedEmptyCount} failed
+              {confirmClearFailed
+                ? `Confirm clear ${failedEmptyCount}`
+                : `Clear ${failedEmptyCount} failed`}
             </Button>
           )}
           <Link
@@ -223,22 +238,23 @@ export function ReportList() {
           />
         </div>
         <div className="w-full sm:w-48">
-          <Select
+          <select
             value={statusFilter}
-            onValueChange={(v) => {
-              if (v === statusFilter) return
+            onChange={(event) => {
+              const value = event.target.value as StatusFilter
+              if (value === statusFilter) return
               resetListForFilterChange()
-              setStatusFilter(v as StatusFilter)
+              setStatusFilter(value)
             }}
-            placeholder="All statuses"
+            className="tn-native-select"
             aria-label="Filter by status"
           >
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="generating">Generating</SelectItem>
-            <SelectItem value="ready">Ready</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </Select>
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="generating">Generating</option>
+            <option value="ready">Ready</option>
+            <option value="failed">Failed</option>
+          </select>
         </div>
       </div>
 

@@ -6,17 +6,25 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   ArrowUp,
+  ArrowRight,
   CheckCircle2,
   X,
   AlertTriangle,
+  Loader2,
+  Upload,
+  Sparkles,
+  RefreshCw,
+  Mic,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectItem } from '@/components/ui/select'
+import { FileUpload, FileUploadTrigger } from '@/components/ui/file-upload'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { Topbar } from '@/components/layout/topbar'
+import { AppRail } from '@/components/layout/app-rail'
 import { ProgressScreen } from '@/components/generate/progress-screen'
 import { FormattedReport } from '@/components/report/formatted-report'
 import { ExportButton } from '@/components/report/export-button'
@@ -28,7 +36,33 @@ type SectionTemplate = {
   auto_generate?: boolean
 }
 
-type Sections = Record<string, { title: string; content: string }>
+type Sections = Record<
+  string,
+  {
+    title: string
+    content: string
+    status?: 'ready' | 'pending'
+    missing?: string[]
+  }
+>
+
+interface ParsedStandardisedPayload {
+  scores: Record<string, unknown>
+  detectedTools?: string[]
+  summaries?: string[]
+}
+
+type GenerationMode = 'first_draft' | 'full_report'
+
+const ASSESSMENT_CONTEXT_CHIPS = [
+  'In-person',
+  'Telehealth',
+  'Home visit',
+  'Clinic',
+  'Collateral',
+  'File review',
+  'Standardised assessments pending',
+] as const
 
 const generatableSections = (templateData.sections as SectionTemplate[])
   .filter((s) => !s.auto_generate)
@@ -61,14 +95,351 @@ function parseScore(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function normaliseDateForDb(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (iso) return trimmed
+
+  const au = /^(\d{1,2})[/. -](\d{1,2})[/. -](\d{4})$/.exec(trimmed)
+  if (au) {
+    const day = Number(au[1])
+    const month = Number(au[2])
+    const year = Number(au[3])
+    const date = new Date(Date.UTC(year, month - 1, day))
+    if (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    ) {
+      return date.toISOString().slice(0, 10)
+    }
+  }
+
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10)
+}
+
+function normaliseGenerationMode(value: unknown): GenerationMode {
+  return value === 'full_report' || value === 'finalise'
+    ? 'full_report'
+    : 'first_draft'
+}
+
 const SENSORY_OPTIONS = [
-  '',
   'Much less than most people',
   'Less than most people',
   'Similar to most people',
   'More than most people',
   'Much more than most people',
 ] as const
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getNestedRecord(
+  value: unknown,
+  key: string,
+): Record<string, unknown> | null {
+  if (!isRecord(value)) return null
+  const child = value[key]
+  return isRecord(child) ? child : null
+}
+
+function getNestedString(value: unknown, path: string[]): string | null {
+  let current: unknown = value
+  for (const segment of path) {
+    if (!isRecord(current)) return null
+    current = current[segment]
+  }
+  return typeof current === 'string' ? current : null
+}
+
+function getWhodasScore(
+  parsedScores: Record<string, unknown>,
+  domain: string,
+): string {
+  const whodas = getNestedRecord(parsedScores, 'whodas')
+  const domains = getNestedRecord(whodas, 'domains')
+  const row = getNestedRecord(domains, domain)
+  const score = row?.score_0_to_100
+  return typeof score === 'number' ? String(score) : ''
+}
+
+function getSensoryClassification(
+  parsedScores: Record<string, unknown>,
+  quadrant: string,
+): string {
+  return (
+    getNestedString(parsedScores, [
+      'sensory_profile',
+      'quadrants',
+      quadrant,
+      'classification',
+    ]) ?? ''
+  )
+}
+
+function whodasDomain(
+  parsedScores: Record<string, unknown>,
+  key: string,
+  manualScore: string,
+) {
+  const parsedDomain = getNestedRecord(
+    getNestedRecord(parsedScores.whodas, 'domains'),
+    key,
+  )
+  return {
+    ...(parsedDomain ?? {}),
+    score_0_to_100: parseScore(manualScore),
+  }
+}
+
+function sensoryQuadrant(
+  parsedScores: Record<string, unknown>,
+  key: string,
+  classification: string,
+) {
+  const parsedQuadrant = getNestedRecord(
+    getNestedRecord(parsedScores.sensory_profile, 'quadrants'),
+    key,
+  )
+  return {
+    ...(parsedQuadrant ?? {}),
+    classification: classification || null,
+  }
+}
+
+function ContextChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="tn-context-chip"
+      data-active={active ? 'true' : undefined}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+}
+
+function ProfileStatusStrip() {
+  return (
+    <div className="tn-profile-strip">
+      <div className="tn-profile-status" data-state="ready">
+        <span className="dot" />
+        <span><b>Clinician profile</b> · ready</span>
+        <Link href="/settings">Edit</Link>
+      </div>
+      <div className="tn-profile-status" data-state="ready">
+        <span className="dot" />
+        <span><b>Default FCA template</b> selected</span>
+      </div>
+      <div className="tn-profile-status" data-state="later">
+        <span className="dot" />
+        <span><b>Header defaults</b> can be added later</span>
+      </div>
+    </div>
+  )
+}
+
+function FirstDraftEntry({
+  participantName,
+  setParticipantName,
+  clinicalNotes,
+  setClinicalNotes,
+  assessmentContext,
+  toggleContext,
+  draftSavedAt,
+  onCreate,
+  onOpenReports,
+  onStartComplete,
+}: {
+  participantName: string
+  setParticipantName: (value: string) => void
+  clinicalNotes: string
+  setClinicalNotes: (value: string) => void
+  assessmentContext: string[]
+  toggleContext: (value: string) => void
+  draftSavedAt: Date | null
+  onCreate: () => void
+  onOpenReports: () => void
+  onStartComplete: () => void
+}) {
+  const canCreate = participantName.trim().length > 0 && clinicalNotes.trim().length > 0
+  const wordCount = clinicalNotes.trim().split(/\s+/).filter(Boolean).length
+  const shortNotes = clinicalNotes.trim().length > 0 && wordCount < 40
+
+  return (
+    <>
+      <div className="tn-source-grid">
+        <section className="tn-source-card" data-primary="true">
+          <div className="tn-source-head">
+            <div>
+              <div className="tn-source-title">
+                <Sparkles size={16} />
+                Start new FCA draft
+              </div>
+              <p>
+                Only the clinical inputs that affect the first draft. Header
+                details, assessment reports, goals and export checks come later.
+              </p>
+            </div>
+            <span className="tn-save-pill">
+              <span className="dot" />
+              {draftSavedAt ? `Saved ${formatRelativeTime(draftSavedAt)}` : 'Autosaves on this device'}
+            </span>
+          </div>
+
+          <div className="tn-source-body">
+            <Label className="tn-source-field">
+              <span>Participant label <b>*</b></span>
+              <Input
+                className="tn-source-input"
+                value={participantName}
+                onChange={(event) => setParticipantName(event.target.value)}
+                placeholder="e.g. Luka B, Participant A, or internal reference"
+              />
+              <small>
+                Used to find this draft later. Not part of the report unless you
+                add a full name in Header Details.
+              </small>
+            </Label>
+
+            <Label className="tn-source-field">
+              <span>
+                Clinical notes <b>*</b>
+                <em>ADLs, IADLs, supports, risks, functional impact</em>
+              </span>
+              <Textarea
+                className="tn-source-notes"
+                value={clinicalNotes}
+                onChange={(event) => setClinicalNotes(event.target.value)}
+                placeholder="Paste or dictate OT notes. Include ADLs, IADLs, mobility, cognition, sensory presentation, mental health, current supports, risks, and functional impact examples."
+              />
+              <small>
+                {shortNotes ? (
+                  <>
+                    <AlertTriangle size={13} /> Short notes may produce a generic draft. You can continue and edit later.
+                  </>
+                ) : clinicalNotes.trim() ? (
+                  `${wordCount.toLocaleString()} words · ready for first draft`
+                ) : (
+                  <>
+                    <Mic size={13} /> You can also dictate, then edit before generating.
+                  </>
+                )}
+              </small>
+            </Label>
+
+            <div className="tn-source-field">
+              <span className="tn-source-label">
+                Assessment context <em>optional, helps describe the assessment process</em>
+              </span>
+              <div className="tn-context-chips">
+                {ASSESSMENT_CONTEXT_CHIPS.map((chip) => (
+                  <ContextChip
+                    key={chip}
+                    label={chip}
+                    active={assessmentContext.includes(chip)}
+                    onClick={() => toggleContext(chip)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="tn-source-foot">
+            <span>Creates a saved report workspace immediately.</span>
+            <Button
+              type="button"
+              className="tn-create-draft-btn"
+              disabled={!canCreate}
+              onClick={onCreate}
+            >
+              Create draft workspace
+              <ArrowRight size={14} />
+            </Button>
+          </div>
+        </section>
+
+        <aside className="tn-entry-side">
+          <section className="tn-side-card">
+            <div className="tn-side-card-head">
+              <h2>Continue recent work</h2>
+              <p>Open an existing draft to add assessments or finalise.</p>
+            </div>
+            <div className="tn-recent-list">
+              <Link href="/reports" className="tn-recent-row">
+                <span className="ini">LB</span>
+                <span>
+                  <b>Luka B. (sample)</b>
+                  <small>Stage 1 · first draft ready, resume to add assessments</small>
+                </span>
+                <ArrowRight size={14} />
+              </Link>
+              <Link href="/reports" className="tn-recent-row">
+                <span className="ini">MH</span>
+                <span>
+                  <b>Morgan H. (sample)</b>
+                  <small>Stage 1 · awaiting OT review of clinical draft</small>
+                </span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+            <button type="button" className="tn-side-link" onClick={onOpenReports}>
+              View all reports <ArrowRight size={13} />
+            </button>
+          </section>
+
+          <section className="tn-side-card tn-finalise-card">
+            <div className="tn-finalise-icon">
+              <RefreshCw size={16} />
+            </div>
+            <div>
+              <h2>Finalise existing report</h2>
+              <p>
+                Open a draft to upload standardised OT assessment reports, add
+                participant goals, and generate Part D plus final recommendations.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onOpenReports}>
+              Open reports
+              <ArrowRight size={13} />
+            </Button>
+          </section>
+
+          <details className="tn-side-card tn-advanced-card">
+            <summary>
+              <span>Advanced</span>
+              <b>Generate complete FCA from scratch</b>
+            </summary>
+            <p>
+              For cases where notes, standardised OT assessment reports and
+              participant goals are already available and no draft exists yet.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={onStartComplete}>
+              Start complete report
+              <ArrowRight size={13} />
+            </Button>
+          </details>
+        </aside>
+      </div>
+
+      <ProfileStatusStrip />
+    </>
+  )
+}
 
 export default function GeneratePage() {
   // Identity fields (visible at top)
@@ -105,6 +476,13 @@ export default function GeneratePage() {
   const [sensoryAvoiding, setSensoryAvoiding] = useState('')
   const [sensorySensitivity, setSensorySensitivity] = useState('')
   const [sensorySeeking, setSensorySeeking] = useState('')
+  const [parsedStandardisedScores, setParsedStandardisedScores] = useState<
+    Record<string, unknown>
+  >({})
+  const [standardisedFileNames, setStandardisedFileNames] = useState<string[]>([])
+  const [standardisedSummaries, setStandardisedSummaries] = useState<string[]>([])
+  const [standardisedParseError, setStandardisedParseError] = useState<string | null>(null)
+  const [isParsingStandardised, setIsParsingStandardised] = useState(false)
 
   // NDIS goals (collapsible — unlocks Part E)
   const [goal1, setGoal1] = useState('')
@@ -113,10 +491,13 @@ export default function GeneratePage() {
 
   // Notes
   const [clinicalNotes, setClinicalNotes] = useState('')
+  const [assessmentContext, setAssessmentContext] = useState<string[]>([])
 
   // UI state
   const [showBanner, setShowBanner] = useState(true)
   const [showValidation, setShowValidation] = useState(false)
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('first_draft')
+  const [workflowStarted, setWorkflowStarted] = useState(false)
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
@@ -129,14 +510,24 @@ export default function GeneratePage() {
   const reportRef = useRef<HTMLDivElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClient(), [])
-  const router = useRouter()
+  const { push } = useRouter()
 
   // User id is needed to scope the draft autosave key per account.
   const [userId, setUserId] = useState<string | undefined>(undefined)
+  const [authReady, setAuthReady] = useState(false)
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.id) setUserId(user.id)
-    })
+    let mounted = true
+    void supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (!mounted) return
+        setUserId(user?.id)
+      })
+      .finally(() => {
+        if (mounted) setAuthReady(true)
+      })
+    return () => {
+      mounted = false
+    }
   }, [supabase])
 
   // Auto-fill assessor + clinic fields from the clinician profile, but only
@@ -165,6 +556,7 @@ export default function GeneratePage() {
 
   // Banner shown briefly when an existing draft is restored from localStorage.
   const [restoredAt, setRestoredAt] = useState<Date | null>(null)
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null)
   const dismissRestoredBanner = useCallback(() => setRestoredAt(null), [])
 
   // Snapshot all form fields for the autosave hook. Recomputes on every render
@@ -200,6 +592,9 @@ export default function GeneratePage() {
       goal2,
       goal3,
       clinicalNotes,
+      assessmentContext,
+      generationMode,
+      workflowStarted,
     }),
     [
       participantName, ndisNumber, assessor,
@@ -209,6 +604,9 @@ export default function GeneratePage() {
       sensoryLowReg, sensoryAvoiding, sensorySensitivity, sensorySeeking,
       goal1, goal2, goal3,
       clinicalNotes,
+      assessmentContext,
+      generationMode,
+      workflowStarted,
     ],
   )
 
@@ -246,52 +644,131 @@ export default function GeneratePage() {
     setGoal2(draft.goal2 ?? '')
     setGoal3(draft.goal3 ?? '')
     setClinicalNotes(draft.clinicalNotes ?? '')
+    setAssessmentContext(Array.isArray(draft.assessmentContext) ? draft.assessmentContext : [])
+    setGenerationMode(normaliseGenerationMode(draft.generationMode))
+    setWorkflowStarted(Boolean(
+      draft.workflowStarted ||
+        draft.clinicalNotes ||
+        draft.participantName ||
+        draft.ndisNumber ||
+        draft.assessor,
+    ))
     setRestoredAt(savedAt)
+    setDraftSavedAt(savedAt)
   }, [])
 
-  const { clear: clearDraft } = useFormDraft({
+  const { clear: clearDraft, ready: draftReady } = useFormDraft({
     storageKey: 'theranotes:generate:draft',
     userId,
     state: formSnapshot,
     onRestore: handleDraftRestore,
-    skipRestore: isGenerating || isDone,
-    // Round-2 NEW-9: strip the highest-value PII from the persisted draft.
-    // Participant name / NDIS# / DOB / address are typed from a referral
-    // every time, so re-typing them costs the clinician seconds — but
-    // leaving them in localStorage on a shared workstation costs the
-    // participant a privacy breach. The narrative clinical notes are
-    // retained because the editor takes 5-10 minutes to re-create them.
-    redact: (s) => ({
-      ...s,
-      participantName: '',
-      ndisNumber: '',
-      participantDob: '',
-      address: '',
-      nokName: '',
-      nokPhone: '',
-    }),
+    onSave: setDraftSavedAt,
+    skipRestore: isGenerating || isDone || !authReady,
   })
+
+  const toggleAssessmentContext = useCallback((value: string) => {
+    setAssessmentContext((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    )
+    setWorkflowStarted(true)
+  }, [])
+
+  const handleStandardisedFilesAdded = useCallback(async (files: File[]) => {
+    if (files.length === 0 || isParsingStandardised) return
+
+    setIsParsingStandardised(true)
+    setStandardisedParseError(null)
+
+    try {
+      const formData = new FormData()
+      for (const file of files) formData.append('files', file)
+
+      const response = await fetch('/api/standardised-assessments/parse', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = (await response.json().catch(() => ({}))) as Partial<
+        ParsedStandardisedPayload & { error: string }
+      >
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to read standardised assessment.')
+      }
+
+      const scores = data.scores ?? {}
+      setParsedStandardisedScores((prev) => ({ ...prev, ...scores }))
+      setStandardisedFileNames(files.map((file) => file.name))
+      setStandardisedSummaries(data.summaries ?? [])
+      setGenerationMode('full_report')
+      setWorkflowStarted(true)
+
+      const nextWhodasUnderstanding = getWhodasScore(scores, 'cognition')
+      const nextWhodasMobility = getWhodasScore(scores, 'mobility')
+      const nextWhodasSelfCare = getWhodasScore(scores, 'self_care')
+      const nextWhodasGettingAlong = getWhodasScore(scores, 'getting_along')
+      const nextWhodasLifeActivities = getWhodasScore(scores, 'life_activities')
+      const nextWhodasParticipation = getWhodasScore(scores, 'participation')
+
+      if (nextWhodasUnderstanding) setWhodasUnderstanding(nextWhodasUnderstanding)
+      if (nextWhodasMobility) setWhodasMobility(nextWhodasMobility)
+      if (nextWhodasSelfCare) setWhodasSelfCare(nextWhodasSelfCare)
+      if (nextWhodasGettingAlong) setWhodasGettingAlong(nextWhodasGettingAlong)
+      if (nextWhodasLifeActivities) setWhodasLifeActivities(nextWhodasLifeActivities)
+      if (nextWhodasParticipation) setWhodasParticipation(nextWhodasParticipation)
+
+      const nextLowReg = getSensoryClassification(scores, 'low_registration')
+      const nextAvoiding = getSensoryClassification(scores, 'sensation_avoiding')
+      const nextSensitivity = getSensoryClassification(scores, 'sensory_sensitivity')
+      const nextSeeking = getSensoryClassification(scores, 'sensation_seeking')
+
+      if (nextLowReg) setSensoryLowReg(nextLowReg)
+      if (nextAvoiding) setSensoryAvoiding(nextAvoiding)
+      if (nextSensitivity) setSensorySensitivity(nextSensitivity)
+      if (nextSeeking) setSensorySeeking(nextSeeking)
+    } catch (err) {
+      setStandardisedParseError(
+        err instanceof Error ? err.message : 'Failed to read standardised assessment.',
+      )
+    } finally {
+      setIsParsingStandardised(false)
+    }
+  }, [isParsingStandardised])
 
   // Redirect to workspace after generation completes
   useEffect(() => {
     if (isDone && reportId) {
       const timer = setTimeout(() => {
-        router.push(`/reports/${reportId}`)
+        push(`/reports/${reportId}`)
       }, 1500)
       return () => clearTimeout(timer)
     }
-  }, [isDone, reportId, router])
+  }, [isDone, reportId, push])
 
-  const placeholder = `Paste or dictate your clinical notes. Cover: diagnoses · ADLs · mobility & transfers · mental health · sensory & cognition · current supports.`
+  const isCompleteReportMode = generationMode === 'full_report'
+  const placeholder = isCompleteReportMode
+    ? 'Paste the OT clinical notes and any final assessor comments. Use this path only when the report has not already been drafted.'
+    : 'Paste or dictate your clinical notes. Cover: diagnoses, ADLs, IADLs, mobility and transfers, mental health, sensory/cognition, risks, and current supports.'
 
   // ---------------------------------------------------------------------------
   // Derived intake state — drives section status chips and the preview banner.
   // Mirror the lib/ai/intake.ts availability rules so what the UI shows matches
   // what the generator actually does.
   // ---------------------------------------------------------------------------
+  const participantDobValid = Boolean(normaliseDateForDb(participantDob))
   const clientHasMinimum = Boolean(
-    participantName.trim() && ndisNumber.trim() && participantDob.trim(),
+    participantName.trim() && ndisNumber.trim() && participantDobValid,
   )
+  const clientStatusLabel = clientHasMinimum
+    ? 'Ready'
+    : !participantName.trim()
+      ? 'Needs name'
+      : !ndisNumber.trim()
+        ? 'Needs NDIS'
+        : !participantDob.trim()
+          ? 'Needs DOB'
+          : 'Check DOB'
   const assessorHasMinimum = Boolean(
     assessor.trim() && assessorCredentials.trim(),
   )
@@ -315,13 +792,15 @@ export default function GeneratePage() {
   // Map intake state to section-level outcomes for preview banner.
   // Header: needs client + assessor minimums.
   // Parts A/B/C/Overview/Process: always generate when clinical notes present.
-  // Part D: needs at least one assessment scored (WHODAS or sensory).
-  // Part E: needs at least one NDIS goal.
+  // Part D: needs at least one standardised assessment scored or uploaded.
+  // Part E: generates as a functional-impairment summary first, then as the
+  // full final section once standardised scores are available.
   const headerWillGenerate = clientHasMinimum && assessorHasMinimum
   const partDWillGenerate = whodasHasAny || sensoryHasAny
-  const partEWillGenerate = goalsHasAny
   // Overview, Assessment Process, Parts A/B/C — 5 narrative sections always run when notes present.
   const narrativeWillGenerate = clinicalNotes.trim().length > 50
+  const partEWillGenerate = narrativeWillGenerate
+  const partEFinalWillGenerate = partEWillGenerate && partDWillGenerate
   const sectionsThatWillGenerate =
     (headerWillGenerate ? 1 : 0) +
     (narrativeWillGenerate ? 5 : 0) +
@@ -329,8 +808,24 @@ export default function GeneratePage() {
     (partEWillGenerate ? 1 : 0)
   const pendingLabels: string[] = []
   if (!headerWillGenerate) pendingLabels.push('Header')
-  if (!partDWillGenerate) pendingLabels.push('Part D')
-  if (!partEWillGenerate) pendingLabels.push('Part E')
+  if (!partDWillGenerate) {
+    pendingLabels.push(isCompleteReportMode ? 'assessment evidence' : 'Part D')
+  }
+  const primaryButtonLabel = !clinicalNotes.trim()
+    ? 'Add clinical notes'
+    : isCompleteReportMode
+      ? partDWillGenerate
+        ? 'Generate complete report'
+        : 'Add assessment evidence'
+      : 'Draft first OT report'
+  const notesTitle = isCompleteReportMode
+    ? 'Clinical notes and all evidence'
+    : 'OT clinical evidence'
+  const notesStatus = clinicalNotes.trim().length > 0
+    ? `${clinicalNotes.trim().length} characters`
+    : isCompleteReportMode
+      ? 'Required for new report'
+      : 'Required'
 
   /** Core generation logic, shared by both paths */
   const runGeneration = useCallback(async () => {
@@ -353,6 +848,7 @@ export default function GeneratePage() {
       }
 
       const participant = participantName.trim() || 'Quick Generate'
+      const participantDobForDb = normaliseDateForDb(participantDob)
 
       // Assemble structured intake from all form sections.
       // Sparse fields are omitted entirely — the generator's INSUF flagging
@@ -372,6 +868,7 @@ export default function GeneratePage() {
         assessment: {
           ...(reportDate.trim() && { report_date: reportDate.trim() }),
           ...(assessmentMode && { mode: assessmentMode }),
+          ...(assessmentContext.length > 0 && { context: assessmentContext }),
         },
       }
 
@@ -392,29 +889,65 @@ export default function GeneratePage() {
         sensorySeeking,
       ].some((v) => v.trim().length > 0)
 
-      const standardizedScores: Record<string, unknown> = {}
+      const standardizedScores: Record<string, unknown> = {
+        ...parsedStandardisedScores,
+      }
       if (whodasFilled) {
         standardizedScores.whodas = {
-          understanding_communicating: parseScore(whodasUnderstanding),
-          getting_around: parseScore(whodasMobility),
-          self_care: parseScore(whodasSelfCare),
-          getting_along: parseScore(whodasGettingAlong),
-          life_activities: parseScore(whodasLifeActivities),
-          participation: parseScore(whodasParticipation),
+          ...(isRecord(parsedStandardisedScores.whodas)
+            ? parsedStandardisedScores.whodas
+            : {}),
+          tool: getNestedString(parsedStandardisedScores, ['whodas', 'tool']) ?? 'WHODAS 2.0',
+          domains: {
+            ...(getNestedRecord(parsedStandardisedScores.whodas, 'domains') ?? {}),
+            cognition: whodasDomain(parsedStandardisedScores, 'cognition', whodasUnderstanding),
+            mobility: whodasDomain(parsedStandardisedScores, 'mobility', whodasMobility),
+            self_care: whodasDomain(parsedStandardisedScores, 'self_care', whodasSelfCare),
+            getting_along: whodasDomain(parsedStandardisedScores, 'getting_along', whodasGettingAlong),
+            life_activities: whodasDomain(parsedStandardisedScores, 'life_activities', whodasLifeActivities),
+            participation: whodasDomain(parsedStandardisedScores, 'participation', whodasParticipation),
+          },
         }
       }
       if (sensoryFilled) {
         standardizedScores.sensory_profile = {
-          low_registration: sensoryLowReg || null,
-          sensation_avoiding: sensoryAvoiding || null,
-          sensory_sensitivity: sensorySensitivity || null,
-          sensation_seeking: sensorySeeking || null,
+          ...(isRecord(parsedStandardisedScores.sensory_profile)
+            ? parsedStandardisedScores.sensory_profile
+            : {}),
+          tool:
+            getNestedString(parsedStandardisedScores, ['sensory_profile', 'tool']) ??
+            'Adolescent/Adult Sensory Profile',
+          quadrants: {
+            ...(getNestedRecord(parsedStandardisedScores.sensory_profile, 'quadrants') ?? {}),
+            low_registration: sensoryQuadrant(
+              parsedStandardisedScores,
+              'low_registration',
+              sensoryLowReg,
+            ),
+            sensation_avoiding: sensoryQuadrant(
+              parsedStandardisedScores,
+              'sensation_avoiding',
+              sensoryAvoiding,
+            ),
+            sensory_sensitivity: sensoryQuadrant(
+              parsedStandardisedScores,
+              'sensory_sensitivity',
+              sensorySensitivity,
+            ),
+            sensation_seeking: sensoryQuadrant(
+              parsedStandardisedScores,
+              'sensation_seeking',
+              sensorySeeking,
+            ),
+          },
         }
       }
 
-      const ndisGoals = [goal1, goal2, goal3]
-        .map((g) => g.trim())
-        .filter((g) => g.length > 0)
+      const ndisGoals = [goal1, goal2, goal3].reduce<string[]>((goals, goal) => {
+        const trimmed = goal.trim()
+        if (trimmed) goals.push(trimmed)
+        return goals
+      }, [])
 
       const { data: assessment, error: assessmentError } = await supabase
         .from('assessments')
@@ -422,7 +955,7 @@ export default function GeneratePage() {
           user_id: user.id,
           title: `${participant} FCA`,
           participant_name: participant,
-          participant_dob: participantDob.trim() || null,
+          participant_dob: participantDobForDb,
           ndis_number: ndisNumber.trim() || null,
           assessor_name: assessor.trim() || null,
           assessor_credentials: assessorCredentials.trim() || null,
@@ -474,6 +1007,8 @@ export default function GeneratePage() {
         accumulatedSections[data.sectionId] = {
           title: data.sectionId,
           content: data.content,
+          status: data.status,
+          missing: data.missing,
         }
         setSections({ ...accumulatedSections })
         setCompletedCount(i + 1)
@@ -525,6 +1060,7 @@ export default function GeneratePage() {
     assessorCredentials,
     assessorEmail,
     assessorCompany,
+    assessmentContext,
     address,
     assessmentDate,
     assessmentMode,
@@ -539,6 +1075,7 @@ export default function GeneratePage() {
     participantName,
     planStart,
     planEnd,
+    parsedStandardisedScores,
     reportDate,
     sensoryLowReg,
     sensoryAvoiding,
@@ -557,12 +1094,16 @@ export default function GeneratePage() {
   /** Send button click: show validation first, then generate */
   const handleGenerate = useCallback(() => {
     if (!clinicalNotes.trim()) return
+    if (isCompleteReportMode && !partDWillGenerate) {
+      setShowValidation(true)
+      return
+    }
     if (!showValidation) {
       setShowValidation(true)
       return
     }
     runGeneration()
-  }, [clinicalNotes, showValidation, runGeneration])
+  }, [clinicalNotes, isCompleteReportMode, partDWillGenerate, showValidation, runGeneration])
 
   /** "Generate anyway" bypasses validation */
   const handleGenerateAnyway = useCallback(() => {
@@ -654,12 +1195,28 @@ export default function GeneratePage() {
     )
   }
 
+  const draftHydrating = !authReady || (Boolean(userId) && !draftReady)
+
+  if (draftHydrating) {
+    return (
+      <div className="tn-entry-shell">
+        <AppRail />
+        <main className="tn-gen-screen">
+          <div className="tn-entry-loading" role="status" aria-live="polite">
+            <Loader2 size={16} className="animate-spin" />
+            <span>Preparing your draft workspace...</span>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   // --- Generate input screen (default) ---
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Topbar />
+    <div className="tn-entry-shell">
+      <AppRail />
 
-      <div className="tn-gen-screen">
+      <main className="tn-gen-screen">
         {/* Draft-restored banner: shown once when localStorage hydrates state.
             Takes priority over the first-run tip so the user notices they're
             editing a saved draft, not starting fresh. */}
@@ -705,14 +1262,141 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Title */}
-        <h1 className="tn-gen-title">
-          Draft a Functional Capacity Assessment
-        </h1>
-        <p className="tn-gen-sub">
-          Fill in the participant and paste your clinical notes &mdash;
-          we&rsquo;ll draft Parts A through E.
-        </p>
+        <div className="tn-gen-header">
+          <div>
+            <h1 className="tn-gen-title">
+              Create a Functional Capacity Assessment
+            </h1>
+            <p className="tn-gen-sub">
+              Start with the clinical draft. Add header details, assessment
+              reports, goals and export checks later in the report workspace.
+            </p>
+          </div>
+        </div>
+
+        {!isCompleteReportMode ? (
+          <FirstDraftEntry
+            participantName={participantName}
+            setParticipantName={(value) => {
+              setParticipantName(value)
+              setWorkflowStarted(true)
+            }}
+            clinicalNotes={clinicalNotes}
+            setClinicalNotes={(value) => {
+              setClinicalNotes(value)
+              setWorkflowStarted(true)
+            }}
+            assessmentContext={assessmentContext}
+            toggleContext={toggleAssessmentContext}
+            draftSavedAt={draftSavedAt}
+            onCreate={() => {
+              setGenerationMode('first_draft')
+              setWorkflowStarted(true)
+              setShowValidation(false)
+              runGeneration()
+            }}
+            onOpenReports={() => push('/reports')}
+            onStartComplete={() => {
+              setGenerationMode('full_report')
+              setWorkflowStarted(true)
+              setShowValidation(false)
+            }}
+          />
+        ) : !workflowStarted ? (
+          <div className="tn-workflow-entry">
+            <div className="tn-workflow-grid">
+              <section className="tn-workflow-card" data-priority="primary">
+                <span className="tn-mode-kicker">Most common first step</span>
+                <h2>Start a first OT draft</h2>
+                <p>
+                  Use clinical notes to draft Sections A-C and the
+                  functional-impairment summary. Standardised OT assessment
+                  reports can be added later from the report workspace.
+                </p>
+                <Button
+                  type="button"
+                  className="tn-generate-btn"
+                  onClick={() => {
+                    setGenerationMode('first_draft')
+                    setWorkflowStarted(true)
+                    setShowValidation(false)
+                  }}
+                >
+                  Start draft
+                  <ArrowUp size={14} />
+                </Button>
+              </section>
+
+              <section className="tn-workflow-card">
+                <span className="tn-mode-kicker">Already drafted</span>
+                <h2>Finalise an existing report</h2>
+                <p>
+                  Open the report you already generated, then use Add
+                  assessments to upload standardised OT assessment reports and
+                  regenerate Part D plus final recommendations.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => push('/reports')}
+                >
+                  Open reports
+                </Button>
+              </section>
+
+              <section className="tn-workflow-card">
+                <span className="tn-mode-kicker">All evidence available now</span>
+                <h2>Generate a complete FCA</h2>
+                <p>
+                  Use this only when the OT notes and standardised assessment
+                  PDFs are already available before any draft report exists.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setGenerationMode('full_report')
+                    setWorkflowStarted(true)
+                    setShowValidation(false)
+                  }}
+                >
+                  Start complete report
+                </Button>
+              </section>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="tn-form-context">
+              <div>
+                <span className="tn-mode-kicker">
+                  {isCompleteReportMode ? 'Complete report' : 'First OT draft'}
+                </span>
+                <strong>
+                  {isCompleteReportMode
+                    ? 'Clinical notes plus standardised assessment evidence'
+                    : 'Sections A-C plus functional-impairment summary'}
+                </strong>
+              </div>
+              <div className="tn-form-actions">
+                <span className="tn-save-state">
+                  {draftSavedAt
+                    ? `Saved ${formatRelativeTime(draftSavedAt)}`
+                    : 'Autosaves on this device for 24 hours'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setWorkflowStarted(false)
+                    setShowValidation(false)
+                  }}
+                >
+                  Change workflow
+                </Button>
+              </div>
+            </div>
 
         {/* Main input card */}
         <div className="tn-gen-card">
@@ -747,23 +1431,26 @@ export default function GeneratePage() {
             </Label>
           </div>
 
+          <div className="tn-gen-body">
           {/* Collapsible intake sections — required where the section gates */}
           <div className="tn-intake-stack">
             <details className="tn-intake-section">
               <summary className="tn-intake-summary">
-                <span className="tn-intake-title">Client Details</span>
-                <span className="tn-intake-status">
-                  {clientHasMinimum
-                    ? '✓ Header will populate'
-                    : 'Add DOB to populate Header'}
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Case setup</span>
+                  <span className="tn-intake-title">Participant & plan</span>
+                  <span className="tn-intake-desc">DOB, plan dates, address, primary contact</span>
+                </span>
+                <span className="tn-intake-status" data-state={clientHasMinimum ? 'ready' : 'missing'}>
+                  {clientStatusLabel}
                 </span>
               </summary>
               <div className="tn-intake-grid">
                 <Label className="tn-intake-field">
                   <span className="tn-intake-lbl">Date of birth</span>
                   <Input
-                    type="date"
                     className="tn-intake-input"
+                    placeholder="13 Oct 2005 or 2005-10-13"
                     value={participantDob}
                     onChange={(e) => setParticipantDob(e.target.value)}
                   />
@@ -771,8 +1458,8 @@ export default function GeneratePage() {
                 <Label className="tn-intake-field">
                   <span className="tn-intake-lbl">Plan start</span>
                   <Input
-                    type="date"
                     className="tn-intake-input"
+                    placeholder="11 May 2026"
                     value={planStart}
                     onChange={(e) => setPlanStart(e.target.value)}
                   />
@@ -780,8 +1467,8 @@ export default function GeneratePage() {
                 <Label className="tn-intake-field">
                   <span className="tn-intake-lbl">Plan end</span>
                   <Input
-                    type="date"
                     className="tn-intake-input"
+                    placeholder="10 May 2027"
                     value={planEnd}
                     onChange={(e) => setPlanEnd(e.target.value)}
                   />
@@ -816,11 +1503,15 @@ export default function GeneratePage() {
 
             <details className="tn-intake-section">
               <summary className="tn-intake-summary">
-                <span className="tn-intake-title">Assessor & Assessment Details</span>
-                <span className="tn-intake-status">
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Case setup</span>
+                  <span className="tn-intake-title">Assessment context</span>
+                  <span className="tn-intake-desc">Clinician identity, provider, assessment date, mode</span>
+                </span>
+                <span className="tn-intake-status" data-state={assessorHasMinimum ? 'ready' : 'missing'}>
                   {assessorHasMinimum
-                    ? '✓ Header will populate'
-                    : 'Add credentials & company'}
+                    ? 'Ready'
+                    : 'Needs credentials'}
                 </span>
               </summary>
               <div className="tn-intake-grid">
@@ -862,8 +1553,8 @@ export default function GeneratePage() {
                 <Label className="tn-intake-field">
                   <span className="tn-intake-lbl">Report date</span>
                   <Input
-                    type="date"
                     className="tn-intake-input"
+                    placeholder="11 May 2026"
                     value={reportDate}
                     onChange={(e) => setReportDate(e.target.value)}
                   />
@@ -886,13 +1577,73 @@ export default function GeneratePage() {
               </div>
             </details>
 
+            {isCompleteReportMode ? (
+              <>
+            <details className="tn-intake-section" data-priority="standardised">
+              <summary className="tn-intake-summary">
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Assessment evidence</span>
+                  <span className="tn-intake-title">Standardised OT assessment reports</span>
+                  <span className="tn-intake-desc">Upload completed assessment PDFs for Part D and final recommendations</span>
+                </span>
+                <span className="tn-intake-status" data-state={standardisedFileNames.length > 0 || partDWillGenerate ? 'ready' : 'missing'}>
+                  {standardisedFileNames.length > 0
+                    ? `${standardisedFileNames.length} read`
+                    : partDWillGenerate
+                      ? 'Scores entered'
+                      : 'Upload PDF'}
+                </span>
+              </summary>
+              <div className="tn-intake-stack-tight">
+                <FileUpload
+                  accept="application/pdf,.pdf"
+                  multiple
+                  disabled={isParsingStandardised}
+                  onFilesAdded={handleStandardisedFilesAdded}
+                >
+                  <FileUploadTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isParsingStandardised}
+                      className="w-fit gap-2"
+                    >
+                      {isParsingStandardised ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Upload className="size-4" />
+                      )}
+                      {isParsingStandardised ? 'Reading PDFs...' : 'Upload assessment PDFs'}
+                    </Button>
+                  </FileUploadTrigger>
+                </FileUpload>
+                {(standardisedSummaries.length > 0 || standardisedParseError) && (
+                  <div className="tn-standardised-results">
+                    {standardisedSummaries.map((summary) => (
+                      <div key={summary}>{summary}</div>
+                    ))}
+                    {standardisedParseError && (
+                      <div className="tn-standardised-error">
+                        {standardisedParseError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </details>
+
             <details className="tn-intake-section">
               <summary className="tn-intake-summary">
-                <span className="tn-intake-title">WHODAS 2.0 Scores</span>
-                <span className="tn-intake-status">
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Assessment evidence</span>
+                  <span className="tn-intake-title">WHODAS 2.0 scores, if used</span>
+                  <span className="tn-intake-desc">Cognition, mobility, self-care, social, activities, participation</span>
+                </span>
+                <span className="tn-intake-status" data-state={whodasHasAny ? 'ready' : 'pending'}>
                   {whodasHasAny
-                    ? '✓ Part D will generate'
-                    : '⏸ Part D will skip'}
+                    ? 'Part D ready'
+                    : 'Pending'}
                 </span>
               </summary>
               <div className="tn-intake-grid">
@@ -967,10 +1718,14 @@ export default function GeneratePage() {
 
             <details className="tn-intake-section">
               <summary className="tn-intake-summary">
-                <span className="tn-intake-title">Adolescent / Adult Sensory Profile</span>
-                <span className="tn-intake-status">
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Assessment evidence</span>
+                  <span className="tn-intake-title">Sensory Profile quadrants, if used</span>
+                  <span className="tn-intake-desc">Low registration, avoiding, sensitivity, seeking classifications</span>
+                </span>
+                <span className="tn-intake-status" data-state={sensoryHasAny ? 'ready' : 'optional'}>
                   {sensoryHasAny
-                    ? '✓ Part D will include sensory analysis'
+                    ? 'Included'
                     : 'Optional'}
                 </span>
               </summary>
@@ -983,7 +1738,7 @@ export default function GeneratePage() {
                     placeholder="— select —"
                     aria-label="Low Registration"
                   >
-                    {SENSORY_OPTIONS.filter(Boolean).map((opt) => (
+                    {SENSORY_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
@@ -998,7 +1753,7 @@ export default function GeneratePage() {
                     placeholder="— select —"
                     aria-label="Sensation Avoiding"
                   >
-                    {SENSORY_OPTIONS.filter(Boolean).map((opt) => (
+                    {SENSORY_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
@@ -1013,7 +1768,7 @@ export default function GeneratePage() {
                     placeholder="— select —"
                     aria-label="Sensory Sensitivity"
                   >
-                    {SENSORY_OPTIONS.filter(Boolean).map((opt) => (
+                    {SENSORY_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
@@ -1028,7 +1783,7 @@ export default function GeneratePage() {
                     placeholder="— select —"
                     aria-label="Sensation Seeking"
                   >
-                    {SENSORY_OPTIONS.filter(Boolean).map((opt) => (
+                    {SENSORY_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
@@ -1040,11 +1795,17 @@ export default function GeneratePage() {
 
             <details className="tn-intake-section">
               <summary className="tn-intake-summary">
-                <span className="tn-intake-title">NDIS Goals (verbatim, participant-stated)</span>
-                <span className="tn-intake-status">
+                <span className="tn-intake-main">
+                  <span className="tn-intake-kicker">Final report</span>
+                  <span className="tn-intake-title">NDIS goals</span>
+                  <span className="tn-intake-desc">Verbatim participant-stated goals for final Part E</span>
+                </span>
+                <span className="tn-intake-status" data-state={goalsHasAny ? 'ready' : 'optional'}>
                   {goalsHasAny
-                    ? `✓ Part E will quote ${goalsCount} goal${goalsCount === 1 ? '' : 's'}`
-                    : '⏸ Part E will skip'}
+                    ? `${goalsCount} goal${goalsCount === 1 ? '' : 's'}`
+                    : partEFinalWillGenerate
+                      ? 'Missing'
+                      : 'Later'}
                 </span>
               </summary>
               <div className="tn-intake-stack-tight">
@@ -1075,7 +1836,50 @@ export default function GeneratePage() {
                 </Label>
               </div>
             </details>
+              </>
+            ) : (
+              <div className="tn-later-card">
+                <div>
+                  <span className="tn-intake-kicker">Later step</span>
+                  <strong>Standardised assessment evidence</strong>
+                  <span>
+                    Standardised OT assessment reports and NDIS goals are used
+                    when the OT is ready to complete Part D and full
+                    recommendations in the report workspace.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+
+          <div className="tn-notes-panel">
+            <div className="tn-notes-head">
+              <span>{notesTitle}</span>
+              <span>{notesStatus}</span>
+            </div>
+            <div className="tn-notes-guide" aria-label="Clinical evidence areas">
+              {isCompleteReportMode ? (
+                <>
+                  <span>assessment findings</span>
+                  <span>functional severity</span>
+                  <span>goals</span>
+                  <span>recommendations</span>
+                  <span>risks</span>
+                  <span>final caveats</span>
+                </>
+              ) : (
+                <>
+                  <span>Diagnoses</span>
+                  <span>ADLs</span>
+                  <span>IADLs</span>
+                  <span>mobility</span>
+                  <span>home</span>
+                  <span>supports</span>
+                  <span>mental health</span>
+                  <span>sensory / cognition</span>
+                </>
+              )}
+            </div>
 
           {/* Textarea */}
           <Textarea
@@ -1088,15 +1892,28 @@ export default function GeneratePage() {
           {/* Section preview — what the Generate button will actually produce */}
           {clinicalNotes.trim().length > 0 && (
             <div className="tn-section-preview">
-              Will generate{' '}
+              {isCompleteReportMode ? 'Complete report will generate ' : 'First draft will generate '}
               <strong>{sectionsThatWillGenerate} of 8 sections</strong>.
               {pendingLabels.length > 0 && (
                 <>
                   {' '}
                   Pending:{' '}
-                  <strong>{pendingLabels.join(', ')}</strong> — add the
-                  unlocking data above to include{' '}
-                  {pendingLabels.length === 1 ? 'it' : 'them'}.
+                  <strong>{pendingLabels.join(', ')}</strong>
+                  {isCompleteReportMode
+                    ? ', upload or enter the standardised assessment evidence above.'
+                    : ', add those later from the report workspace after standardised assessment upload.'}
+                </>
+              )}
+              {partEWillGenerate && (
+                <>
+                  {' '}
+                  Part E:{' '}
+                  <strong>
+                    {partEFinalWillGenerate
+                      ? 'full summary and recommendations'
+                      : 'functional-impairment summary only'}
+                  </strong>
+                  .
                 </>
               )}
             </div>
@@ -1112,22 +1929,22 @@ export default function GeneratePage() {
               className="tn-generate-btn"
               onClick={handleGenerate}
               disabled={!clinicalNotes.trim()}
-              aria-label={`Generate ${sectionsThatWillGenerate} sections`}
+              aria-label={primaryButtonLabel}
               title={`Generate ${sectionsThatWillGenerate} of 8 sections`}
             >
-              {sectionsThatWillGenerate > 0
-                ? `Generate ${sectionsThatWillGenerate} ${sectionsThatWillGenerate === 1 ? 'section' : 'sections'}`
-                : 'Generate sections'}
+              {primaryButtonLabel}
               <ArrowUp size={14} />
             </Button>
+          </div>
+          </div>
           </div>
         </div>
 
         {/* Quick-add chips removed (Day 1 review): they injected literal sample
-            text into the clinical notes textarea ("hypersensitive to noise in
-            community settings", "WHODAS 2.0 total 62", etc.), which is
+            text into the clinical notes textarea ("requires prompting with
+            ADLs", "assessment score indicates severe impairment", etc.), which is
             clinically contaminating and now redundant with the structured
-            intake sections above (Sensory Profile / WHODAS Scores / NDIS Goals
+            intake sections above (standardised assessment evidence / NDIS goals
             each have their own typed input). */}
 
         {/* Validation warning */}
@@ -1135,21 +1952,32 @@ export default function GeneratePage() {
           <div className="tn-valid tn-fade-up">
             <div className="tn-valid-head">
               <AlertTriangle size={16} />
-              Some domains look thin &mdash; the draft may contain
-              &ldquo;insufficient data&rdquo; markers.
+              {isCompleteReportMode ? 'Review complete report inputs.' : 'Review first draft scope.'}
             </div>
             <ul className="tn-valid-list">
+              {!clientHasMinimum && (
+                <li>
+                  <b>Header:</b> add participant name, NDIS number, and a valid
+                  DOB if this draft needs the report header populated.
+                </li>
+              )}
+              {!partDWillGenerate && isCompleteReportMode && (
+                <li>
+                  <b>Assessment evidence:</b> upload at least one standardised
+                  OT assessment report, or enter scores manually where
+                  supported, before generating Part D and recommendations.
+                </li>
+              )}
+              {!partDWillGenerate && !isCompleteReportMode && (
+                <li>
+                  <b>Part D:</b> standardised assessment findings can be added
+                  later from standardised OT assessment reports.
+                </li>
+              )}
               <li>
-                <b>Mental Health</b> &mdash; try adding triggers, coping
-                strategies, treating clinician.
-              </li>
-              <li>
-                <b>Standardised Scores</b> &mdash; include WHODAS domains and
-                any FIM / sensory scores.
-              </li>
-              <li>
-                <b>Sensory profile</b> &mdash; describe any hyper- or
-                hypo-responsiveness.
+                <b>Clinical notes:</b> stronger drafts come from concrete
+                examples of ADLs, IADLs, supports, risks, observations, and
+                functional impact.
               </li>
             </ul>
             <div className="tn-valid-actions">
@@ -1158,14 +1986,16 @@ export default function GeneratePage() {
                 size="sm"
                 onClick={() => setShowValidation(false)}
               >
-                Add more notes
+                Keep editing
               </Button>
               <Button
                 variant="default"
                 size="sm"
                 onClick={handleGenerateAnyway}
               >
-                Generate anyway
+                {isCompleteReportMode && !partDWillGenerate
+                  ? 'Generate first draft anyway'
+                  : 'Generate anyway'}
               </Button>
             </div>
           </div>
@@ -1184,13 +2014,15 @@ export default function GeneratePage() {
             {error}
           </div>
         )}
+          </>
+        )}
 
         {/* Footnote */}
         <div className="tn-gen-footnote">
           TheraNotes drafts clinical-grade reports &mdash; every line remains
           yours to edit and verify before sending to NDIS.
         </div>
-      </div>
+      </main>
     </div>
   )
 }

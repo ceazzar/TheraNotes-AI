@@ -5,6 +5,8 @@ type Sections = Record<string, { title: string; content: string }>
 interface ElementNode {
   type?: string
   children: Descendant[]
+  sectionKey?: string
+  sectionTitle?: string
 }
 
 function getNodeText(node: Descendant): string {
@@ -109,29 +111,41 @@ export function plateToSections(
 ): Sections {
   const sections: Sections = {}
   let currentTitle = ''
+  let currentKey = ''
   let currentNodes: Descendant[] = []
   let sectionIndex = 0
 
   function flushSection() {
     if (!currentTitle && currentNodes.length === 0) return
 
-    const key = sectionKeys[sectionIndex] ?? currentTitle
+    const key = currentKey || sectionKeys[sectionIndex] || currentTitle
+    const title = currentKey || sectionKeys[sectionIndex] || currentTitle
     // Pre-process so tables become text-paragraph blocks the serializer
     // can actually emit. Without this, DOCX export silently fails.
     const safeNodes = preprocessForMarkdown(currentNodes)
     const content = editor.api.markdown.serialize({ value: safeNodes })
 
-    sections[key] = { title: currentTitle, content }
+    sections[key] = { title, content }
     sectionIndex++
     currentTitle = ''
+    currentKey = ''
     currentNodes = []
   }
 
   for (const node of value) {
-    const type = (node as { type?: string }).type
-    if (type === 'h2') {
+    const element = node as ElementNode
+    const type = element.type
+    const expectedKey = sectionKeys[sectionIndex]
+    const nodeText = getNodeText(node).trim()
+    const isTemplateSectionHeading =
+      type === 'h2' &&
+      (typeof element.sectionKey === 'string' ||
+        (typeof expectedKey === 'string' && nodeText === expectedKey))
+
+    if (isTemplateSectionHeading) {
       flushSection()
-      currentTitle = getNodeText(node)
+      currentKey = element.sectionKey ?? expectedKey ?? nodeText
+      currentTitle = element.sectionTitle ?? currentKey
     } else {
       currentNodes.push(node)
     }

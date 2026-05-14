@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, RotateCw, Shield } from 'lucide-react'
+import { ChevronLeft, Loader2, RotateCw, Shield, Sparkles, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { FileUpload, FileUploadTrigger } from '@/components/ui/file-upload'
 import { Topbar } from '@/components/layout/topbar'
 import { saveAs } from 'file-saver'
 import { generateDocx } from '@/lib/export/docx'
@@ -17,6 +18,7 @@ import templateData from '@/lib/template.json'
 import { PlateDocEditor, type PlateEditorHandle } from './plate-editor'
 import { TocSidebar } from './toc-sidebar'
 import { WorkspaceFooter } from './workspace-footer'
+import { ClinicalAssistantPanel } from './clinical-assistant-panel'
 import type { ReportSection, Flag, Participant } from '@/lib/workspace/types'
 import type { Value } from 'platejs'
 
@@ -29,8 +31,18 @@ const RESUMABLE_SECTIONS = (templateData.sections as GeneratableSection[])
   .filter((s) => !s.auto_generate)
   .sort((a, b) => a.order - b.order)
   .map((s) => s.name)
+const STANDARDISED_FINALISE_SECTIONS = [
+  'Part D: Assessment Findings',
+  'Part E: Summary & Recommendations',
+] as const
 
 type Sections = Record<string, { title: string; content: string }>
+
+interface ParsedStandardisedPayload {
+  scores: Record<string, unknown>
+  summaries?: string[]
+  error?: string
+}
 
 interface Report {
   id: string
@@ -48,6 +60,10 @@ interface PlannerFlag {
   ndisRationale: string
   originalText?: string
   refined?: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function mapPlannerFlags(plannerFlags: PlannerFlag[]): Flag[] {
@@ -83,6 +99,9 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
 
   const [activeSection, setActiveSection] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [assistantCollapsed, setAssistantCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 1180,
+  )
 
   // Round-3 UA-4: Resume affordance state. `isResuming` gates the banner +
   // disables the button while the loop runs. `resumeProgress` surfaces
@@ -93,6 +112,9 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   const [resumeProgress, setResumeProgress] = useState<
     { current: number; total: number; sectionName: string } | null
   >(null)
+  const [isFinalisingAssessments, setIsFinalisingAssessments] = useState(false)
+  const [finaliseProgress, setFinaliseProgress] = useState<string | null>(null)
+  const [finaliseError, setFinaliseError] = useState<string | null>(null)
 
   const editorRef = useRef<PlateEditorHandle>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -144,6 +166,7 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
         title: r.sections[key]?.title ?? key,
       }))
       setTocSections(toc)
+      if (toc.length > 0) setActiveSection(toc[0].id)
 
       // Convert planner flags
       setFlags(mapPlannerFlags(r.planner_review?.flags ?? []))
@@ -201,7 +224,10 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     for (const key of sectionKeys) {
       const sec = report.sections[key]
       if (!sec?.content) continue
-      const stripped = sec.content.replace(/\[INSUFFICIENT DATA:[^\]]*\]/g, '').trim()
+      const stripped = sec.content
+        .replace(/\[INSUFFICIENT DATA:[^\]]*\]/g, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim()
       if (stripped.length > 0) touched.add(key)
     }
     return touched
@@ -348,6 +374,120 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
     }
   }, [report, missingSections, isResuming, router, supabase])
 
+  const handleStandardisedFinalise = useCallback(async (files: File[]) => {
+    if (!report || !report.assessment_id || files.length === 0 || isFinalisingAssessments) {
+      return
+    }
+
+    setIsFinalisingAssessments(true)
+    setFinaliseError(null)
+
+    try {
+      setFinaliseProgress('Saving report edits')
+      await saveToSupabase()
+
+      setFinaliseProgress('Reading standardised assessment PDFs')
+      const formData = new FormData()
+      for (const file of files) formData.append('files', file)
+
+      const parseResponse = await fetch('/api/standardised-assessments/parse', {
+        method: 'POST',
+        body: formData,
+      })
+      const parsed = (await parseResponse.json().catch(() => ({}))) as ParsedStandardisedPayload
+      if (!parseResponse.ok) {
+        throw new Error(parsed.error || 'Failed to read standardised assessment PDFs')
+      }
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('You must be logged in to finalise the report.')
+
+      const { data: assessment } = await supabase
+        .from('assessments')
+        .select('standardized_scores')
+        .eq('id', report.assessment_id)
+        .eq('user_id', user.id)
+        .single()
+
+      const existingScores = isRecord(assessment?.standardized_scores)
+        ? assessment.standardized_scores
+        : {}
+      const mergedScores = { ...existingScores, ...parsed.scores }
+
+      const { error: assessmentError } = await supabase
+        .from('assessments')
+        .update({
+          standardized_scores: mergedScores,
+          status: 'generating',
+        })
+        .eq('id', report.assessment_id)
+        .eq('user_id', user.id)
+
+      if (assessmentError) throw new Error(assessmentError.message)
+
+      for (let i = 0; i < STANDARDISED_FINALISE_SECTIONS.length; i++) {
+        const sectionName = STANDARDISED_FINALISE_SECTIONS[i]
+        setFinaliseProgress(
+          `Generating ${sectionName} (${i + 1} of ${STANDARDISED_FINALISE_SECTIONS.length})`,
+        )
+
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assessmentId: report.assessment_id,
+            reportId: report.id,
+            sectionId: sectionName,
+          }),
+        })
+
+        if (!response.ok) {
+          const errData = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
+          throw new Error(errData.error || `Failed to generate "${sectionName}"`)
+        }
+      }
+
+      setFinaliseProgress('Checking report coherence')
+      const coherenceResponse = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'coherence_check',
+          reportId: report.id,
+        }),
+      })
+      if (!coherenceResponse.ok) {
+        const errData = (await coherenceResponse.json().catch(() => ({}))) as {
+          error?: string
+        }
+        throw new Error(errData.error || 'Failed to run coherence check')
+      }
+
+      await supabase
+        .from('assessments')
+        .update({ status: 'complete' })
+        .eq('id', report.assessment_id)
+        .eq('user_id', user.id)
+
+      router.refresh()
+    } catch (err) {
+      setFinaliseError(
+        err instanceof Error ? err.message : 'Failed to finalise assessment sections',
+      )
+    } finally {
+      setIsFinalisingAssessments(false)
+      setFinaliseProgress(null)
+    }
+  }, [
+    report,
+    isFinalisingAssessments,
+    saveToSupabase,
+    supabase,
+    router,
+  ])
+
   const handleExportDocx = useCallback(async () => {
     const editor = editorRef.current?.editor
     if (!editor) return
@@ -422,11 +562,11 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Topbar />
+    <div className="min-h-screen">
       <div
         className="tn-ws"
         data-sidebar-collapsed={sidebarCollapsed}
+        data-ai-collapsed={assistantCollapsed ? 'true' : undefined}
         style={{ '--sidebar-w': '280px' } as React.CSSProperties}
       >
         {/* Sidebar */}
@@ -471,6 +611,29 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
               </span>
             </div>
             <div className="tn-ws-top-actions">
+              {report.assessment_id && (
+                <FileUpload
+                  accept="application/pdf,.pdf"
+                  multiple
+                  disabled={isFinalisingAssessments}
+                  onFilesAdded={handleStandardisedFinalise}
+                >
+                  <FileUploadTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      disabled={isFinalisingAssessments}
+                    >
+                      {isFinalisingAssessments ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Upload size={13} />
+                      )}
+                      {isFinalisingAssessments ? 'Finalising...' : 'Add standardised reports'}
+                    </Button>
+                  </FileUploadTrigger>
+                </FileUpload>
+              )}
               <Button
                 variant="ghost"
                 size="xs"
@@ -479,11 +642,42 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
               >
                 <Shield size={13} /> {isReviewing ? 'Reviewing...' : 'NDIS Review'}
               </Button>
+              {assistantCollapsed && (
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={() => setAssistantCollapsed(false)}
+                >
+                  <Sparkles size={13} /> Open AI panel
+                </Button>
+              )}
             </div>
           </div>
         {reviewError && (
           <div className="tn-ws-error" role="status">
             {reviewError}
+          </div>
+        )}
+
+        {(isFinalisingAssessments || finaliseError) && (
+          <div className="tn-ws-resume" role="status" aria-live="polite">
+            <div className="tn-ws-resume-body">
+              {isFinalisingAssessments ? (
+                <Loader2 size={14} className="tn-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              <div>
+                <div className="tn-ws-resume-title">
+                  {isFinalisingAssessments
+                    ? finaliseProgress ?? 'Finalising standardised assessment sections'
+                    : 'Standardised assessment finalisation stopped.'}
+                </div>
+                {!isFinalisingAssessments && finaliseError && (
+                  <div className="tn-ws-resume-error">{finaliseError}</div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -560,6 +754,20 @@ export function WorkspaceLayout({ reportId }: WorkspaceLayoutProps) {
             reviewing={isReviewing}
           />
         </div>
+
+        <ClinicalAssistantPanel
+          collapsed={assistantCollapsed}
+          activeSection={activeSection}
+          sections={tocSections}
+          flags={flags}
+          saveStatus={saveStatus}
+          reviewing={isReviewing}
+          finalising={isFinalisingAssessments}
+          onCollapse={() => setAssistantCollapsed(true)}
+          onExpand={() => setAssistantCollapsed(false)}
+          onRunReview={handleRunReview}
+          onAddAssessmentFiles={handleStandardisedFinalise}
+        />
       </div>
     </div>
   )

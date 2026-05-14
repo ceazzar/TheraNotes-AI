@@ -10,15 +10,13 @@
  * can render from server defaults first, then hydrate the draft with a
  * "draft restored" toast.
  *
- * Round-2 NEW-9 — PHI hygiene:
+ * PHI hygiene:
  * - 24h TTL: drafts older than the TTL are dropped on mount.
- * - `redact`: caller-supplied function that strips the most-sensitive
- *   identity fields (participant name, NDIS#, DOB, address) from the
- *   snapshot BEFORE it's written to localStorage. Those fields are
- *   typically retyped from a referral every time, so the autosave doesn't
- *   need to remember them — and on a shared workstation, the next user
- *   shouldn't be able to read them via DevTools.
- * - Schema bumped to v=2; v=1 entries are silently discarded.
+ * - Per-user key: drafts do not restore across different authenticated users.
+ * - The caller may provide `redact` for highly sensitive deployments, but the
+ *   default /generate experience preserves the full intake so refreshes do not
+ *   wipe participant details mid-session.
+ * - Schema v=2; older entries are silently discarded.
  *
  * Design choices:
  * - Debounced 400ms — typing feels instant, save fires once user pauses.
@@ -26,7 +24,7 @@
  * - clear() must be called on successful submit so the next visit starts fresh.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
@@ -39,6 +37,8 @@ interface UseFormDraftOptions<T> {
   state: T
   /** Called once on mount with restored draft + saved-at timestamp, if any. */
   onRestore: (draft: T, savedAt: Date) => void
+  /** Called after a successful local save. */
+  onSave?: (savedAt: Date) => void
   /** Skip restore (e.g., if state is mid-generation). Defaults to false. */
   skipRestore?: boolean
   /** Debounce in ms. Defaults to 400. */
@@ -48,9 +48,6 @@ interface UseFormDraftOptions<T> {
   /**
    * Optional redactor — called with the current state immediately before
    * persistence. Return a copy with PHI / sensitive fields zeroed out.
-   * Identity-class fields (participant name, NDIS#, DOB, address) should
-   * always be redacted because they're high-value PII that re-typing from
-   * a referral takes seconds.
    */
   redact?: (state: T) => T
 }
@@ -70,17 +67,25 @@ export function useFormDraft<T>({
   debounceMs = 400,
   ttlMs = DEFAULT_TTL_MS,
   redact,
-}: UseFormDraftOptions<T>): { clear: () => void } {
-  const restoredRef = useRef(false)
+  onSave,
+}: UseFormDraftOptions<T>): { clear: () => void; ready: boolean } {
+  const restoredKeyRef = useRef<string | null>(null)
+  const [readyKey, setReadyKey] = useState<string | null>(null)
   const onRestoreRef = useRef(onRestore)
+  const onSaveRef = useRef(onSave)
   const redactRef = useRef(redact)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const key = userId ? `${storageKey}:${userId}` : null
+  const ready = Boolean(key && readyKey === key)
 
   useEffect(() => {
     onRestoreRef.current = onRestore
   }, [onRestore])
+
+  useEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
 
   useEffect(() => {
     redactRef.current = redact
@@ -88,12 +93,12 @@ export function useFormDraft<T>({
 
   // Restore once on mount (and again if userId becomes known).
   useEffect(() => {
-    if (skipRestore || restoredRef.current || !key) return
+    if (skipRestore || restoredKeyRef.current === key) return
+    if (!key) return
     if (typeof window === 'undefined') return
     try {
       const raw = window.localStorage.getItem(key)
       if (!raw) {
-        restoredRef.current = true
         return
       }
       const parsed = JSON.parse(raw) as StoredDraft<T>
@@ -118,14 +123,17 @@ export function useFormDraft<T>({
         window.localStorage.removeItem(key)
       } catch {}
     } finally {
-      restoredRef.current = true
+      restoredKeyRef.current = key
+      queueMicrotask(() => {
+        setReadyKey((current) => (current === key ? current : key))
+      })
     }
   }, [key, skipRestore, ttlMs])
 
   // Save on every state change (debounced). Don't save until restore has run
   // — otherwise we'd race-overwrite the saved draft with empty initial state.
   useEffect(() => {
-    if (!key || !restoredRef.current) return
+    if (!key || restoredKeyRef.current !== key) return
     if (typeof window === 'undefined') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
@@ -133,12 +141,14 @@ export function useFormDraft<T>({
         // Apply caller-supplied redaction (e.g. strip participant name /
         // NDIS# / DOB / address) so PHI doesn't sit in localStorage.
         const safeState = redactRef.current ? redactRef.current(state) : state
+        const savedAt = new Date()
         const payload: StoredDraft<T> = {
           state: safeState,
-          savedAt: new Date().toISOString(),
+          savedAt: savedAt.toISOString(),
           v: 2,
         }
         window.localStorage.setItem(key, JSON.stringify(payload))
+        onSaveRef.current?.(savedAt)
       } catch {
         // Storage quota exceeded or denied — degrade silently.
       }
@@ -155,5 +165,5 @@ export function useFormDraft<T>({
     } catch {}
   }, [key])
 
-  return { clear }
+  return { clear, ready }
 }

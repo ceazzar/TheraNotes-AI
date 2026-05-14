@@ -112,18 +112,19 @@ export function reportToPlate(sections: Sections): {
   const sectionKeys: string[] = []
 
   for (const template of orderedSections) {
-    const entry = Object.entries(sections).find(
-      ([, sec]) => sec.title === template.name
+    const fallbackEntry = Object.entries(sections).find(
+      ([, sec]) => sec.title === template.name,
     )
-
-    const key = entry?.[0] ?? template.name
-    const section = entry?.[1]
+    const section = sections[template.name] ?? fallbackEntry?.[1]
+    const key = sections[template.name] ? template.name : fallbackEntry?.[0] ?? template.name
     sectionKeys.push(key)
 
     nodes.push({
       type: 'h2',
-      children: [{ text: section?.title ?? template.name }],
-    } as Descendant)
+      sectionKey: key,
+      sectionTitle: template.name,
+      children: [{ text: template.name }],
+    } as unknown as Descendant)
 
     if (section?.content) {
       const blocks = splitContentAndTables(section.content)
