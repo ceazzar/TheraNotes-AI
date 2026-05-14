@@ -430,10 +430,16 @@
    SCREEN 1 -- Generate
    ========================================================================== */
 .tn-entry-shell {
+  --tn-entry-bg: #f7f8fb;
+  --tn-entry-panel: #ffffff;
+  --tn-entry-panel-muted: #f9fafc;
+  --tn-entry-line: #d7dde7;
+  --tn-entry-line-soft: #e5e9f0;
+  --tn-entry-line-strong: #c9d1dd;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
-  background: var(--tn-bg);
+  background: var(--tn-entry-bg);
 }
 .tn-app-rail {
   position: sticky;
@@ -521,6 +527,7 @@
   min-height: 100vh;
   align-items: stretch;
   padding: 28px 28px 32px;
+  background: var(--tn-entry-bg);
 }
 .tn-app-page-screen {
   min-height: 100vh;
@@ -598,12 +605,12 @@
   gap: 12px;
   padding: 10px 14px 10px 16px;
   margin-bottom: 22px;
-  background: var(--tn-bg-raised);
-  border: 1px solid var(--tn-line);
+  background: var(--tn-entry-panel);
+  border: 1px solid var(--tn-entry-line);
   border-radius: var(--tn-radius-pill);
   font-size: 13px;
   color: var(--tn-muted-1);
-  box-shadow: var(--tn-shadow-flat);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .tn-banner-dot {
   width: 6px;
@@ -771,14 +778,19 @@
 }
 .tn-source-card,
 .tn-side-card {
-  background: var(--tn-bg-raised);
-  border: 1px solid var(--tn-line-soft);
+  background: var(--tn-entry-panel);
+  border: 1px solid var(--tn-entry-line);
   border-radius: 10px;
-  box-shadow: var(--tn-shadow-card);
+  box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.35), 0 1px 3px rgba(15, 23, 42, 0.07);
+}
+.tn-source-card[data-primary="true"] {
+  border-color: var(--tn-entry-line-strong);
+  overflow: hidden;
 }
 .tn-source-head {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--tn-line-soft);
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--tn-entry-line);
+  background: var(--tn-entry-panel-muted);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -809,8 +821,8 @@
   min-height: 34px;
   padding: 0 10px;
   border-radius: 7px;
-  border: 1px solid var(--tn-line-soft);
-  background: var(--tn-chip);
+  border: 1px solid var(--tn-entry-line);
+  background: var(--tn-entry-panel);
   color: var(--tn-muted-1);
   font-size: 12px;
   white-space: nowrap;
@@ -825,18 +837,33 @@
   padding: 18px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
+  background: var(--tn-entry-panel);
 }
 .tn-source-field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  align-items: stretch;
+  text-align: left;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--tn-entry-line-soft);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+.tn-source-field[data-slot="label"] {
+  align-items: stretch;
+}
+.tn-source-field:focus-within {
+  border-color: color-mix(in srgb, var(--tn-accent) 36%, var(--tn-entry-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tn-accent) 10%, transparent);
 }
 .tn-source-field > span,
 .tn-source-label {
   color: var(--tn-ink);
   font-size: 13px;
   font-weight: 600;
+  text-align: left;
 }
 .tn-source-field b {
   color: var(--tn-crit);
@@ -860,13 +887,15 @@
 }
 .tn-source-input {
   min-height: 42px;
-  border-color: var(--tn-line-soft);
+  border-color: var(--tn-entry-line);
+  background: var(--tn-entry-panel);
   box-shadow: none;
 }
 .tn-source-notes {
   min-height: 270px;
   resize: vertical;
-  border-color: var(--tn-line-soft);
+  border-color: var(--tn-entry-line);
+  background: var(--tn-entry-panel);
   box-shadow: none;
   font-size: 14px;
   line-height: 1.62;
@@ -879,8 +908,8 @@
 .tn-context-chip {
   min-height: 30px;
   border-radius: var(--tn-radius-pill);
-  border: 1px solid var(--tn-line);
-  background: var(--tn-bg);
+  border: 1px solid var(--tn-entry-line);
+  background: var(--tn-entry-panel);
   color: var(--tn-ink-2);
   padding: 0 11px;
   font-size: 12.5px;
@@ -898,7 +927,8 @@
   justify-content: space-between;
   gap: 14px;
   padding: 14px 20px 16px;
-  border-top: 1px solid var(--tn-line-soft);
+  border-top: 1px solid var(--tn-entry-line);
+  background: var(--tn-entry-panel-muted);
   color: var(--tn-muted-1);
   font-size: 12.5px;
 }
@@ -931,6 +961,10 @@ button.tn-create-draft-btn[disabled]:hover {
 .tn-side-card {
   padding: 16px;
 }
+.tn-side-card-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tn-entry-line-soft);
+}
 .tn-side-card-head h2,
 .tn-side-card h2 {
   margin: 0;
@@ -942,7 +976,7 @@ button.tn-create-draft-btn[disabled]:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 .tn-recent-row {
   display: grid;
@@ -950,19 +984,22 @@ button.tn-create-draft-btn[disabled]:hover {
   align-items: center;
   gap: 10px;
   padding: 11px;
-  border: 1px solid var(--tn-line-soft);
+  border: 1px solid var(--tn-entry-line-soft);
   border-radius: 8px;
+  background: #fbfcfe;
   color: var(--tn-ink);
   text-decoration: none;
 }
 .tn-recent-row:hover {
-  background: var(--tn-chip);
+  border-color: var(--tn-entry-line);
+  background: #f6f8fb;
 }
 .tn-recent-row .ini {
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  background: var(--tn-chip);
+  background: #eef2f7;
+  border: 1px solid var(--tn-entry-line-soft);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -998,6 +1035,7 @@ button.tn-create-draft-btn[disabled]:hover {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
 }
 .tn-finalise-card button {
   grid-column: 2;
@@ -1007,7 +1045,8 @@ button.tn-create-draft-btn[disabled]:hover {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: var(--tn-chip);
+  background: #eef2f7;
+  border: 1px solid var(--tn-entry-line-soft);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1019,6 +1058,9 @@ button.tn-create-draft-btn[disabled]:hover {
   gap: 10px;
   cursor: pointer;
   list-style: none;
+}
+.tn-advanced-card {
+  background: #fbfcfe;
 }
 .tn-advanced-card summary::-webkit-details-marker {
   display: none;
@@ -1052,8 +1094,8 @@ button.tn-create-draft-btn[disabled]:hover {
   min-height: 34px;
   padding: 0 11px;
   border-radius: 8px;
-  border: 1px solid var(--tn-line-soft);
-  background: var(--tn-bg-raised);
+  border: 1px solid var(--tn-entry-line);
+  background: var(--tn-entry-panel);
   color: var(--tn-muted-1);
   font-size: 12.5px;
 }
