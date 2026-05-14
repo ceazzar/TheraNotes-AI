@@ -173,9 +173,11 @@ export async function POST(request: NextRequest) {
 
   const data = await res.json().catch(() => ({}))
 
-  if (data.flags) {
-    await persistPlannerReview({ flags: data.flags, source: 'agent_service' })
+  if (!Array.isArray(data.flags) || data.flags.length === 0) {
+    return runFallbackReview('agent_service_returned_no_flags')
   }
+
+  await persistPlannerReview({ flags: data.flags, source: 'agent_service' })
 
   return NextResponse.json(data, { status: res.status })
 }
