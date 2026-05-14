@@ -1057,6 +1057,7 @@ export default function GeneratePage() {
           .from('reports')
           .update({ status: 'failed' })
           .eq('id', currentReportId)
+        clearDraft()
       }
       if (createdAssessmentId) {
         await supabase
